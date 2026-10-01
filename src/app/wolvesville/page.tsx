@@ -576,7 +576,7 @@ export default function WolvesvillePage() {
                 {/* Editor stile Wolvesville */}
                 <div className="flex flex-col lg:h-[calc(100vh-230px)] lg:min-h-[460px]">
                   <div className="shrink-0">
-                  <div className="mb-2 flex gap-1.5 overflow-x-auto pb-2">
+                  <div className="wov-scroll mb-2 flex gap-1.5 overflow-x-auto pb-2">
                     {CREATOR_CATEGORIES.filter((c) => moonlight || !c.second).map((cat) => {
                       const activeCat = creatorCat === cat.key;
                       const filled = !!slots[cat.slotKey];
@@ -647,10 +647,10 @@ export default function WolvesvillePage() {
                   </div>
 
                   </div>
-                  <div className="min-h-0 flex-1 lg:overflow-y-auto">
+                  <div className="wov-scroll min-h-0 flex-1 lg:overflow-y-auto">
                   <div
-                    className={colMode === "auto" ? "grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7" : "grid gap-2"}
-                    style={colMode === "auto" ? undefined : { gridTemplateColumns: `repeat(${colMode}, minmax(0, 1fr))` }}
+                    className="grid gap-2"
+                    style={{ gridTemplateColumns: colMode === "auto" ? "repeat(auto-fill, minmax(76px, 1fr))" : `repeat(${colMode}, minmax(0, 1fr))` }}
                   >
                     {!activeCategory.isBodyPaint && (
                       <button
@@ -963,7 +963,7 @@ function GameAvatarPreview({
         </h3>
         <div className="flex items-end justify-center gap-4">
           <div
-            className="relative w-[210px] overflow-hidden rounded-lg border border-[#333338] bg-[#0d0d0f]"
+            className="relative w-[240px] overflow-hidden rounded-lg border border-[#333338] bg-[#0d0d0f]"
             style={{ aspectRatio: AVATAR_BOX_RATIO }}
           >
             {layers.length === 0 ? (

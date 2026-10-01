@@ -12,7 +12,7 @@
 import type { WovAvatarSlots } from "./wov-api";
 
 /** Rapporto del box di anteprima (larghezza/altezza in unità @2x). */
-export const AVATAR_BOX_RATIO = "372 / 900";
+export const AVATAR_BOX_RATIO = "372 / 430";
 
 /** Fattore di scala della lapide (renderer dedicato nel gioco: ×1.3). */
 export const GRAVESTONE_SCALE = 1.3;

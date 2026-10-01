@@ -220,3 +220,26 @@
   background-size: 200% 100%;
   animation: shimmer 3s ease-in-out infinite;
 }
+
+/* Scrollbar sottili stile Wolvesville (usate da .wov-scroll) */
+.wov-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.wov-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wov-scroll::-webkit-scrollbar-thumb {
+  background: #3f3f45;
+  border-radius: 999px;
+}
+.wov-scroll::-webkit-scrollbar-thumb:hover {
+  background: #ff2d78;
+}
+.wov-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.wov-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f45 transparent;
+}

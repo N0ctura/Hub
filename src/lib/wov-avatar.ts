@@ -3,9 +3,10 @@
 // posizionato ancorato al FONDO del contenitore, centrato orizzontalmente,
 // con larghezza = larghezzaNaturale / largeDefaultBodyWidth(186) × 50%.
 //
-// Il browser carica le immagini @2x, quindi in unità @2x:
-//   larghezza% del contenitore = naturalWidth@2x / 372 × 100
-// (372 = 186 × 2). Le immagini sono disegnate apposta per allinearsi così:
+// Il browser carica le immagini @2x: la larghezza @1x (usata dalla formula
+// del gioco) è natural@2x / 2, quindi:
+//   larghezza% del contenitore = naturalWidth@2x / 744 × 100
+// Le immagini sono disegnate apposta per allinearsi così:
 // NON servono coordinate per-item.
 
 import type { WovAvatarSlots } from "./wov-api";
@@ -56,9 +57,14 @@ export function storeIconUrl(storeUrl: string): string {
   return `https://cdn2.wolvesville.com/${dir}/${slug}.store@2x.png`;
 }
 
-/** Larghezza del layer in % della larghezza del contenitore. */
+/**
+ * Larghezza del layer in % della larghezza del contenitore.
+ * Formula del gioco: dataWidth / 186 × 50%, dove dataWidth = larghezza @1x.
+ * Le immagini che carichiamo sono @2x, quindi: natural@2x / 2 / 186 × 50%
+ * = natural@2x / 744 × 100.
+ */
 export function layerWidthPercent(natural2xWidth: number, gravestone = false): number {
-  return ((natural2xWidth / 372) * 100) * (gravestone ? GRAVESTONE_SCALE : 1);
+  return ((natural2xWidth / 744) * 100) * (gravestone ? GRAVESTONE_SCALE : 1);
 }
 
 /**

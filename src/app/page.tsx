@@ -18,8 +18,8 @@ const games = [
     title: "Wolvesville",
     description: "Lupi mannari e villici in una battaglia notturna di astuzia.",
     icon: Gamepad2,
-    href: "#",
-    available: false,
+    href: "/wolvesville",
+    available: true,
   },
   {
     title: "Battle Royale",

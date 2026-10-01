@@ -13,15 +13,12 @@ import {
   Search,
   PawPrint,
   Trash2,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ItemPickerDialog } from "@/components/wolvesville/item-picker-dialog";
 import {
   AVATAR_BOX_RATIO,
   buildAvatarLayers,
@@ -69,6 +66,42 @@ const TYPE_ORDER: WovItemType[] = [
   "LEGS",
 ];
 
+interface CreatorCategory {
+  key: string;
+  label: string;
+  icon: string;
+  slotKey: string;
+  type?: WovItemType;
+  isBodyPaint?: boolean;
+  second?: boolean;
+}
+
+/* Categorie nell'ordine del gioco, con i doppioni Moonlight */
+const CREATOR_CATEGORIES: CreatorCategory[] = [
+  { key: "grave", label: "Lapide", icon: "🪦", slotKey: "gravestoneId", type: "GRAVESTONE" },
+  { key: "hat", label: "Cappello", icon: "🎩", slotKey: "hatId", type: "HAT" },
+  { key: "hat2", label: "Cappello", icon: "🎩", slotKey: "hatId2", type: "HAT", second: true },
+  { key: "hair", label: "Capelli", icon: "💇", slotKey: "hairId", type: "HAIR" },
+  { key: "hair2", label: "Capelli", icon: "💇", slotKey: "hairId2", type: "HAIR", second: true },
+  { key: "eyes", label: "Occhi", icon: "👁️", slotKey: "eyesId", type: "EYES" },
+  { key: "eyes2", label: "Occhi", icon: "👁️", slotKey: "eyesId2", type: "EYES", second: true },
+  { key: "glasses", label: "Occhiali", icon: "👓", slotKey: "glassesId", type: "GLASSES" },
+  { key: "glasses2", label: "Occhiali", icon: "👓", slotKey: "glassesId2", type: "GLASSES", second: true },
+  { key: "shirt", label: "Maglia", icon: "👕", slotKey: "shirtId", type: "SHIRT" },
+  { key: "shirt2", label: "Maglia", icon: "👕", slotKey: "shirtId2", type: "SHIRT", second: true },
+  { key: "mouth", label: "Bocca", icon: "👄", slotKey: "mouthId", type: "MOUTH" },
+  { key: "mouth2", label: "Bocca", icon: "👄", slotKey: "mouthId2", type: "MOUTH", second: true },
+  { key: "mask", label: "Maschera", icon: "🎭", slotKey: "maskId", type: "MASK" },
+  { key: "mask2", label: "Maschera", icon: "🎭", slotKey: "maskId2", type: "MASK", second: true },
+  { key: "back", label: "Dietro", icon: "🎒", slotKey: "backId", type: "BACK" },
+  { key: "back2", label: "Dietro", icon: "🎒", slotKey: "backId2", type: "BACK", second: true },
+  { key: "front", label: "Davanti", icon: "🎁", slotKey: "frontId", type: "FRONT" },
+  { key: "front2", label: "Davanti", icon: "🎁", slotKey: "frontId2", type: "FRONT", second: true },
+  { key: "badge", label: "Badge", icon: "🏅", slotKey: "badgeId", type: "BADGE" },
+  { key: "badge2", label: "Badge", icon: "🏅", slotKey: "badgeId2", type: "BADGE", second: true },
+  { key: "paint", label: "Body Paint", icon: "🖌️", slotKey: "bodyPaintId", isBodyPaint: true },
+];
+
 export default function WolvesvillePage() {
   /* ------------------------------ stato base ----------------------------- */
   // Chiave API iniettata a build time dal secret GitHub WOLVESVILLE_API_KEY.
@@ -82,7 +115,6 @@ export default function WolvesvillePage() {
 
   /* ------------------------------- creator ------------------------------- */
   const [slots, setSlots] = useState<WovAvatarSlots>({});
-  const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [shared, setShared] = useState<WovSharedAvatar | null>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -95,6 +127,11 @@ export default function WolvesvillePage() {
   /* --------------------------- skin salvate ------------------------------ */
   const [savedSkins, setSavedSkins] = useState<SavedSkin[]>([]);
   const [skinName, setSkinName] = useState("");
+
+  /* -------------------------- editor stile gioco ------------------------- */
+  const [creatorCat, setCreatorCat] = useState("hat");
+  const [creatorSearch, setCreatorSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(150);
 
   const itemMap = useMemo<ItemMap>(() => {
     const map: ItemMap = {};
@@ -169,31 +206,9 @@ export default function WolvesvillePage() {
     setSlots((prev) => ({ ...prev, [key]: item.id }));
   };
 
-  const setSlot = (slotKey: string, item: WovAvatarItem) => {
-    setSlots((prev) => ({ ...prev, [slotKey]: item.id }));
-  };
-
   const clearSlot = (slotKey: string) => {
     setSlots((prev) => ({ ...prev, [slotKey]: null }));
   };
-
-  const pickerItems = useMemo(() => {
-    if (!pickerSlot) return [];
-    const slotDef = WOV_SLOTS.find((s) => s.key === pickerSlot);
-    if (!slotDef) return [];
-    if (slotDef.type === "BODY_PAINT") {
-      return bodyPaints.map(
-        (bp) => ({ ...(bp as unknown as WovAvatarItem), type: "SHIRT" }) as WovAvatarItem,
-      );
-    }
-    return items.filter((item) => item.type === slotDef.type);
-  }, [pickerSlot, items, bodyPaints]);
-
-  const pickerTitle = useMemo(() => {
-    if (!pickerSlot) return "";
-    const slotDef = WOV_SLOTS.find((s) => s.key === pickerSlot);
-    return slotDef ? `Scegli: ${slotDef.label}` : "";
-  }, [pickerSlot]);
 
   const saveSkin = () => {
     const name = skinName.trim() || `Skin ${savedSkins.length + 1}`;
@@ -213,6 +228,33 @@ export default function WolvesvillePage() {
     const next = savedSkins.filter((_, i) => i !== index);
     setSavedSkins(next);
     persistSavedSkins(next);
+  };
+
+  /* --------------------- griglia categoria (stile gioco) ------------------ */
+
+  const activeCategory =
+    CREATOR_CATEGORIES.find((c) => c.key === creatorCat) ?? CREATOR_CATEGORIES[1];
+
+  const categoryItems = useMemo(() => {
+    const q = creatorSearch.trim().toLowerCase();
+    const base: (WovAvatarItem | WovBodyPaint)[] = activeCategory.isBodyPaint
+      ? bodyPaints
+      : items.filter((i) => i.type === activeCategory.type);
+    if (!q) return base;
+    return base.filter(
+      (i) =>
+        (i.title ?? "").toLowerCase().includes(q) ||
+        i.id.toLowerCase().includes(q),
+    );
+  }, [activeCategory, items, bodyPaints, creatorSearch]);
+
+  const visibleItems = categoryItems.slice(0, visibleCount);
+
+  const toggleEquip = (cat: CreatorCategory, id: string) => {
+    setSlots((prev) => ({
+      ...prev,
+      [cat.slotKey]: prev[cat.slotKey] === id ? null : id,
+    }));
   };
 
   /* ------------------------------ filtri --------------------------------- */
@@ -353,9 +395,13 @@ export default function WolvesvillePage() {
                         ) : shared ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={shared.avatar.url}
+                            src={shared.avatar.url.replace(".png", "@3x.png")}
                             alt="Skin renderizzata"
                             className="max-h-[300px] object-contain"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = shared.avatar.url;
+                            }}
                           />
                         ) : missingRequired.length > 0 ? (
                           <p className="px-4 text-center text-xs text-stone-500">
@@ -415,74 +461,128 @@ export default function WolvesvillePage() {
                   </div>
                 </div>
 
-                {/* Slot */}
+                {/* Editor stile Wolvesville */}
                 <div>
-                  <ScrollArea className="h-[70vh] rounded-lg border border-stone-800 bg-stone-900/40 p-3">
-                    <div className="grid gap-2 pr-2 sm:grid-cols-2">
-                      {WOV_SLOTS.map((slot) => {
-                        const itemId = slots[slot.key];
-                        const item = itemId ? itemMap[itemId] : null;
-                        const required = REQUIRED_SLOT_KEYS.includes(slot.key);
-                        return (
-                          <div
-                            key={slot.key}
-                            className={`flex items-center gap-2 rounded-lg border p-2 ${
-                              item
-                                ? "border-violet-500/40 bg-stone-900"
-                                : required
-                                  ? "border-red-500/30 bg-stone-900/60"
-                                  : "border-stone-800 bg-stone-900/60"
-                            }`}
-                          >
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-stone-800 bg-stone-950">
-                              {item ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={storeIconUrl(item.imageUrl)}
-                                  alt={item.title ?? item.id}
-                                  className="max-h-8 max-w-8 object-contain"
-                                />
-                              ) : (
-                                <span className="text-[10px] text-stone-600">?</span>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs text-stone-400">
-                                {slot.label}
-                                {required && <span className="ml-1 text-red-400">*</span>}
-                              </p>
-                              <p className="truncate text-sm text-stone-200">
-                                {item ? item.title ?? item.id : "vuoto"}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setPickerSlot(slot.key)}
-                              className="border-violet-500/40 px-2 text-violet-300 hover:bg-violet-500/10"
-                            >
-                              Scegli
-                            </Button>
-                            {item && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => clearSlot(slot.key)}
-                                className="px-1.5 text-stone-500 hover:text-red-400"
-                              >
-                                <X size={12} />
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
+                  <div className="mb-2 flex gap-1.5 overflow-x-auto pb-2">
+                    {CREATOR_CATEGORIES.map((cat) => {
+                      const activeCat = creatorCat === cat.key;
+                      const filled = !!slots[cat.slotKey];
+                      return (
+                        <button
+                          key={cat.key}
+                          type="button"
+                          onClick={() => {
+                            setCreatorCat(cat.key);
+                            setCreatorSearch("");
+                            setVisibleCount(150);
+                          }}
+                          className={`relative flex shrink-0 flex-col items-center rounded-lg border px-2.5 py-1.5 transition-colors ${
+                            activeCat
+                              ? "border-violet-500 bg-violet-500/20 text-violet-200"
+                              : "border-stone-800 bg-stone-900/60 text-stone-400 hover:border-stone-600"
+                          }`}
+                        >
+                          <span className="text-lg leading-none">{cat.icon}</span>
+                          <span className="mt-1 whitespace-nowrap text-[10px]">{cat.label}</span>
+                          {cat.second && (
+                            <span className="absolute -right-1.5 -top-1.5 rounded-full bg-violet-600 px-1 text-[8px] font-bold text-white">
+                              2°
+                            </span>
+                          )}
+                          {filled && !activeCat && (
+                            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-green-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="relative mb-3">
+                    <Search
+                      size={14}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500"
+                    />
+                    <Input
+                      value={creatorSearch}
+                      onChange={(e) => {
+                        setCreatorSearch(e.target.value);
+                        setVisibleCount(150);
+                      }}
+                      placeholder={`Cerca in ${activeCategory.label}...`}
+                      className="border-stone-700 bg-stone-900 pl-8 text-stone-200 placeholder:text-stone-600"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
+                    <button
+                      type="button"
+                      onClick={() => clearSlot(activeCategory.slotKey)}
+                      className={`flex aspect-square items-center justify-center rounded-lg border-2 text-xs transition-colors ${
+                        !slots[activeCategory.slotKey]
+                          ? "border-green-500 bg-stone-900 text-stone-300"
+                          : "border-stone-800 bg-stone-900/60 text-stone-500 hover:border-stone-600"
+                      }`}
+                    >
+                      None
+                    </button>
+                    {visibleItems.map((item) => {
+                      const selected = slots[activeCategory.slotKey] === item.id;
+                      const meta = RARITY_META[item.rarity];
+                      const cost = item.costInGold
+                        ? `🪙${item.costInGold}`
+                        : item.costInRoses
+                          ? `🌹${item.costInRoses}`
+                          : item.costInGems
+                            ? `💎${item.costInGems}`
+                            : null;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => toggleEquip(activeCategory, item.id)}
+                          className={`relative flex aspect-square items-center justify-center rounded-lg border-2 bg-stone-900 p-1.5 transition-all ${
+                            selected
+                              ? "border-green-500 ring-2 ring-green-500/40"
+                              : `${meta.border} hover:border-stone-400`
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={storeIconUrl(item.imageUrl)}
+                            alt={item.id}
+                            loading="lazy"
+                            draggable={false}
+                            className="h-full w-full object-contain"
+                          />
+                          {cost && (
+                            <span className="absolute bottom-0.5 right-1 rounded bg-stone-950/80 px-1 text-[9px] text-yellow-300">
+                              {cost}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {categoryItems.length > visibleItems.length && (
+                    <div className="mt-3 text-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVisibleCount((v) => v + 240)}
+                        className="border-stone-700 text-stone-300"
+                      >
+                        Mostra altri ({(categoryItems.length - visibleItems.length).toLocaleString("it-IT")} rimanenti)
+                      </Button>
                     </div>
-                    <p className="mt-3 pr-2 text-[10px] leading-relaxed text-stone-600">
-                      * richiesti dal gioco per generare la skin. Gli slot
-                      &quot;2° layer&quot; sono disponibili in-game solo per i
-                      membri Moonlight.
-                    </p>
-                  </ScrollArea>
+                  )}
+
+                  <p className="mt-3 text-[10px] leading-relaxed text-stone-600">
+                    * Maglia, Occhi, Lapide e Body Paint sono richiesti dal
+                    gioco per generare la skin. I &quot;2° layer&quot; sono
+                    disponibili in-game solo per i membri Moonlight. Clicca di
+                    nuovo un oggetto equipaggiato per rimuoverlo.
+                  </p>
                 </div>
               </div>
             </TabsContent>
@@ -634,16 +734,6 @@ export default function WolvesvillePage() {
           </Tabs>
         )}
       </main>
-
-      {/* Picker */}
-      <ItemPickerDialog
-        open={pickerSlot !== null}
-        onOpenChange={(open) => !open && setPickerSlot(null)}
-        title={pickerTitle}
-        items={pickerItems}
-        loading={loadingData}
-        onSelect={(item) => pickerSlot && setSlot(pickerSlot, item)}
-      />
 
     </div>
   );

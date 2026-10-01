@@ -41,6 +41,12 @@ export interface WovAvatarItem {
 export interface WovBodyPaint {
   id: string;
   imageUrl: string;
+  rarity: WovRarity;
+  event?: string;
+  title?: string;
+  costInGold?: number;
+  costInRoses?: number;
+  costInGems?: number;
   [key: string]: unknown;
 }
 

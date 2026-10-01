@@ -139,6 +139,7 @@ export default function WolvesvillePage() {
   const [creatorCat, setCreatorCat] = useState("hat");
   const [creatorSearch, setCreatorSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(300);
+  const [activeTab, setActiveTab] = useState("creator");
   const [sortMode, setSortMode] = useState<"name" | "rarity-desc" | "rarity-asc">("name");
   const [colMode, setColMode] = useState<"auto" | 4 | 5 | 6 | 7 | 8>("auto");
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -410,18 +411,22 @@ export default function WolvesvillePage() {
   /* ------------------------------ render UI ------------------------------ */
 
   return (
-    <div className="min-h-screen bg-[#141416] font-serif text-stone-100">
+    <div
+      className={`flex min-h-screen flex-col bg-[#272a2a] font-serif text-stone-100 ${
+        activeTab === "creator" ? "lg:h-screen lg:overflow-hidden" : ""
+      }`}
+    >
       {/* Navbar */}
-      <nav className="border-b border-[#2c2c30] bg-[#1b1b1e]/90 p-4 backdrop-blur-md">
+      <nav className="border-b border-[#2c2c30] bg-[#222525]/95 p-4 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2 text-[#ff2d78] transition-colors hover:text-[#ff5c9d]"
+            className="flex items-center gap-2 text-[#ff4081] transition-colors hover:text-[#ff5c9d]"
           >
             <ArrowLeft size={20} />
             <span>Torna all&apos;Hub</span>
           </Link>
-          <div className="flex items-center gap-2 text-xl font-bold tracking-widest text-[#ff2d78]">
+          <div className="flex items-center gap-2 text-xl font-bold tracking-widest text-[#ff4081]">
             <PawPrint size={24} />
             <span>WOV STUDIO</span>
           </div>
@@ -448,12 +453,12 @@ export default function WolvesvillePage() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-6xl p-4 sm:p-8">
-        <header className="mb-8 text-center">
-          <h1 className="mb-2 font-serif text-4xl font-black uppercase tracking-widest text-[#ff2d78] drop-shadow-[0_0_15px_rgba(255,45,120,0.4)] sm:text-5xl">
+      <main className="mx-auto w-full max-w-6xl min-h-0 flex-1 px-4 pb-3 sm:px-6 lg:overflow-hidden">
+        <header className="pb-2 pt-5 text-center lg:pb-1 lg:pt-2">
+          <h1 className="font-serif text-3xl font-black uppercase tracking-widest text-[#ff4081] drop-shadow-[0_0_15px_rgba(255,64,129,0.4)] lg:text-2xl">
             Wolvesville Studio
           </h1>
-          <p className="text-stone-400 italic">
+          <p className="hidden text-sm italic text-stone-400 sm:block lg:hidden">
             Catalogo completo degli oggetti e creatore di skin, con il motore
             grafico ufficiale del gioco.
           </p>
@@ -461,9 +466,9 @@ export default function WolvesvillePage() {
 
         {/* Setup API key */}
         {!apiKey ? (
-          <Card className="mx-auto mb-8 max-w-2xl border-[#3a3a40] bg-[#202024]">
+          <Card className="mx-auto mb-8 max-w-2xl border-[#2f3233] bg-[#36393a]">
             <CardContent className="p-6 text-center">
-              <Moon className="mx-auto mb-4 text-[#ff2d78]" size={40} />
+              <Moon className="mx-auto mb-4 text-[#ff4081]" size={40} />
               <h2 className="mb-2 text-xl font-bold text-stone-100">
                 API key non configurata
               </h2>
@@ -488,14 +493,14 @@ export default function WolvesvillePage() {
             </CardContent>
           </Card>
         ) : dataError ? (
-          <Card className="mx-auto mb-8 max-w-2xl border-red-500/40 bg-[#202024]">
+          <Card className="mx-auto mb-8 max-w-2xl border-red-500/40 bg-[#36393a]">
             <CardContent className="p-6 text-center">
               <p className="mb-4 text-sm text-red-400">{dataError}</p>
               <div className="flex justify-center gap-2">
                 <Button
                   variant="outline"
                   onClick={() => void loadAll(true)}
-                  className="border-[#3f3f45] text-stone-300"
+                  className="border-[#4b4e50] text-stone-300"
                 >
                   <RefreshCw size={14} className="mr-1" /> Riprova
                 </Button>
@@ -503,29 +508,29 @@ export default function WolvesvillePage() {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="creator">
-            <TabsList className="mx-auto mb-6 flex bg-[#202024]">
-              <TabsTrigger value="creator" className="data-[state=active]:text-[#ff2d78]">
+          <Tabs defaultValue="creator" onValueChange={setActiveTab} className="flex h-full min-h-0 flex-col">
+            <TabsList className="mx-auto mb-3 flex shrink-0 bg-[#36393a]">
+              <TabsTrigger value="creator" className="data-[state=active]:text-[#ff4081]">
                 <Layers size={14} className="mr-1" /> Crea Skin
               </TabsTrigger>
-              <TabsTrigger value="catalog" className="data-[state=active]:text-[#ff2d78]">
+              <TabsTrigger value="catalog" className="data-[state=active]:text-[#ff4081]">
                 <Search size={14} className="mr-1" /> Catalogo
               </TabsTrigger>
               {savedSkins.length > 0 && (
-                <TabsTrigger value="saved" className="data-[state=active]:text-[#ff2d78]">
+                <TabsTrigger value="saved" className="data-[state=active]:text-[#ff4081]">
                   <Save size={14} className="mr-1" /> Salvate ({savedSkins.length})
                 </TabsTrigger>
               )}
             </TabsList>
 
             {/* ------------------------- CREA SKIN ------------------------- */}
-            <TabsContent value="creator">
-              <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+            <TabsContent value="creator" className="min-h-0 flex-1 lg:h-full">
+              <div className="grid gap-6 lg:h-full lg:grid-cols-[380px_minmax(0,1fr)]">
                 {/* Preview */}
-                <div className="space-y-4">
+                <div className="wov-scroll space-y-4 lg:overflow-y-auto">
                   <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
 
-                  <Card className="border-[#3a3a40] bg-[#202024]">
+                  <Card className="border-[#2f3233] bg-[#36393a]">
                     <CardContent className="p-4">
                       <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
                         Scarica la skin
@@ -537,7 +542,7 @@ export default function WolvesvillePage() {
                             size="sm"
                             disabled={exporting !== 0}
                             onClick={() => void downloadSkin(q)}
-                            className="bg-[#ff2d78] hover:bg-[#ff4d8d]"
+                            className="bg-[#ff4081] hover:bg-[#ff5c92]"
                           >
                             {exporting === q ? (
                               <Loader2 size={14} className="animate-spin" />
@@ -561,12 +566,12 @@ export default function WolvesvillePage() {
                       value={skinName}
                       onChange={(e) => setSkinName(e.target.value)}
                       placeholder="Nome della skin..."
-                      className="border-[#3f3f45] bg-[#202024] text-stone-200 placeholder:text-stone-600"
+                      className="border-[#4b4e50] bg-[#36393a] text-stone-200 placeholder:text-stone-600"
                     />
                     <Button
                       onClick={saveSkin}
                       size="sm"
-                      className="bg-[#ff2d78] hover:bg-[#ff4d8d]"
+                      className="bg-[#ff4081] hover:bg-[#ff5c92]"
                     >
                       <Save size={14} />
                     </Button>
@@ -574,7 +579,7 @@ export default function WolvesvillePage() {
                 </div>
 
                 {/* Editor stile Wolvesville */}
-                <div className="flex flex-col lg:h-[calc(100vh-230px)] lg:min-h-[460px]">
+                <div className="flex flex-col lg:h-full lg:min-h-0">
                   <div className="shrink-0">
                   <div className="wov-scroll mb-2 flex gap-1.5 overflow-x-auto pb-2">
                     {CREATOR_CATEGORIES.filter((c) => moonlight || !c.second).map((cat) => {
@@ -591,8 +596,8 @@ export default function WolvesvillePage() {
                           }}
                           className={`relative flex shrink-0 flex-col items-center rounded-lg border px-2.5 py-1.5 transition-colors ${
                             activeCat
-                              ? "border-[#ff2d78] bg-[#ff2d78]/15 text-stone-100"
-                              : "border-[#333338] bg-[#202024] text-stone-400 hover:border-[#4a4a50]"
+                              ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
+                              : "border-[#2f3233] bg-[#36393a] text-stone-400 hover:border-[#575a5c]"
                           }`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -604,7 +609,7 @@ export default function WolvesvillePage() {
                           />
                           <span className="mt-1 whitespace-nowrap text-[10px]">{cat.label}</span>
                           {cat.second && (
-                            <span className="absolute -right-1.5 -top-1.5 rounded-full bg-[#ff2d78] px-1 text-[8px] font-bold text-white">
+                            <span className="absolute -right-1.5 -top-1.5 rounded-full bg-[#ff4081] px-1 text-[8px] font-bold text-white">
                               2°
                             </span>
                           )}
@@ -629,7 +634,7 @@ export default function WolvesvillePage() {
                           setVisibleCount(300);
                         }}
                         placeholder={`Cerca in ${activeCategory.label}...`}
-                        className="border-[#3f3f45] bg-[#202024] pl-8 text-stone-200 placeholder:text-stone-600"
+                        className="border-[#4b4e50] bg-[#36393a] pl-8 text-stone-200 placeholder:text-stone-600"
                       />
                     </div>
                     <select
@@ -638,7 +643,7 @@ export default function WolvesvillePage() {
                         setSortMode(e.target.value as "name" | "rarity-desc" | "rarity-asc");
                         setVisibleCount(300);
                       }}
-                      className="shrink-0 rounded-lg border border-[#3f3f45] bg-[#202024] px-2 text-xs text-stone-200"
+                      className="shrink-0 rounded-lg border border-[#4b4e50] bg-[#36393a] px-2 text-xs text-stone-200"
                     >
                       <option value="name">Ordina: nome</option>
                       <option value="rarity-desc">Prima: leggendari</option>
@@ -658,8 +663,8 @@ export default function WolvesvillePage() {
                         onClick={() => clearSlot(activeCategory.slotKey)}
                         className={`flex aspect-square items-center justify-center rounded-lg border-2 text-xs transition-colors ${
                           !slots[activeCategory.slotKey]
-                            ? "border-green-500 bg-[#202024] text-stone-300"
-                            : "border-[#333338] bg-[#202024] text-stone-500 hover:border-[#4a4a50]"
+                            ? "border-green-500 bg-[#484848] text-stone-100"
+                            : "border-[#4b4e50] bg-[#484848] text-stone-400 hover:border-[#6b6e70]"
                         }`}
                       >
                         None
@@ -680,10 +685,10 @@ export default function WolvesvillePage() {
                           key={item.id}
                           type="button"
                           onClick={() => toggleEquip(activeCategory, item.id)}
-                          className={`relative flex aspect-square items-center justify-center rounded-lg border-2 bg-[#202024] p-1.5 transition-all ${
+                          className={`relative flex aspect-square items-center justify-center rounded-lg border-2 bg-[#484848] p-2 transition-all ${
                             selected
                               ? "border-green-500 ring-2 ring-green-500/40"
-                              : `${meta.border} hover:border-stone-400`
+                              : `${meta.border} hover:border-[#6b6e70]`
                           }`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -695,7 +700,7 @@ export default function WolvesvillePage() {
                             className="h-full w-full object-contain"
                           />
                           {cost && (
-                            <span className="absolute bottom-0.5 right-1 rounded bg-[#1b1b1e]/90 px-1 text-[9px] text-yellow-300">
+                            <span className="absolute bottom-0.5 right-1 rounded bg-[#222525]/95 px-1 text-[9px] text-yellow-300">
                               {cost}
                             </span>
                           )}
@@ -729,8 +734,8 @@ export default function WolvesvillePage() {
                     onClick={() => setCatalogType(type)}
                     className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                       catalogType === type
-                        ? "border-[#ff2d78] bg-[#ff2d78]/15 text-stone-100"
-                        : "border-[#3f3f45] text-stone-400 hover:border-[#55555c]"
+                        ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
+                        : "border-[#4b4e50] text-stone-400 hover:border-[#636668]"
                     }`}
                   >
                     {TYPE_LABELS[type]}
@@ -748,7 +753,7 @@ export default function WolvesvillePage() {
                     value={catalogSearch}
                     onChange={(e) => setCatalogSearch(e.target.value)}
                     placeholder="Cerca per nome, ID o colore..."
-                    className="border-[#3f3f45] bg-[#202024] pl-8 text-stone-200 placeholder:text-stone-600"
+                    className="border-[#4b4e50] bg-[#36393a] pl-8 text-stone-200 placeholder:text-stone-600"
                   />
                 </div>
                 <div className="flex flex-wrap justify-center gap-1.5">
@@ -757,8 +762,8 @@ export default function WolvesvillePage() {
                     onClick={() => setCatalogRarity(null)}
                     className={`rounded-full border px-2.5 py-0.5 text-xs ${
                       catalogRarity === null
-                        ? "border-[#ff2d78] bg-[#ff2d78]/15 text-stone-100"
-                        : "border-[#3f3f45] text-stone-400"
+                        ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
+                        : "border-[#4b4e50] text-stone-400"
                     }`}
                   >
                     Tutte le rarità
@@ -772,8 +777,8 @@ export default function WolvesvillePage() {
                       }
                       className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${
                         catalogRarity === r
-                          ? "border-[#ff2d78] bg-[#ff2d78]/15 text-stone-100"
-                          : "border-[#3f3f45] text-stone-400 hover:border-[#55555c]"
+                          ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
+                          : "border-[#4b4e50] text-stone-400 hover:border-[#636668]"
                       }`}
                     >
                       <span className={`h-1.5 w-1.5 rounded-full ${RARITY_META[r].dot}`} />
@@ -793,7 +798,7 @@ export default function WolvesvillePage() {
                 {catalogItems.map((item) => (
                   <Card
                     key={item.id}
-                    className={`group border bg-[#202024] p-2 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(255,45,120,0.15)] ${RARITY_META[item.rarity].border}`}
+                    className={`group border bg-[#36393a] p-2 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(255,64,129,0.15)] ${RARITY_META[item.rarity].border}`}
                   >
                     <CardContent className="flex flex-col items-center p-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -822,7 +827,7 @@ export default function WolvesvillePage() {
                       <Button
                         size="sm"
                         onClick={() => equipItem(item)}
-                        className="mt-2 h-6 w-full bg-[#ff2d78] px-1 text-[10px] hover:bg-[#ff4d8d]"
+                        className="mt-2 h-6 w-full bg-[#ff4081] px-1 text-[10px] hover:bg-[#ff5c92]"
                       >
                         Usa nella skin
                       </Button>
@@ -836,7 +841,7 @@ export default function WolvesvillePage() {
             <TabsContent value="saved">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {savedSkins.map((skin, index) => (
-                  <Card key={skin.savedAt} className="border-[#3a3a40] bg-[#202024]">
+                  <Card key={skin.savedAt} className="border-[#2f3233] bg-[#36393a]">
                     <CardContent className="flex items-center gap-3 p-3">
                       <p className="flex-1 truncate text-sm text-stone-200">{skin.name}</p>
                       <Button
@@ -845,7 +850,7 @@ export default function WolvesvillePage() {
                         onClick={() => {
                           setSlots({ ...skin.slots });
                         }}
-                        className="border-[#ff2d78]/60 text-stone-100 hover:bg-[#ff4d8d]/10"
+                        className="border-[#ff4081]/60 text-stone-100 hover:bg-[#ff5c92]/10"
                       >
                         Carica
                       </Button>
@@ -868,11 +873,11 @@ export default function WolvesvillePage() {
 
       {/* Impostazioni */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="border-[#3a3a40] bg-[#0e0e10] sm:max-w-md">
+        <DialogContent className="border-[#2f3233] bg-[#2a2d2d] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-serif text-stone-100">Impostazioni</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#333338] bg-[#202024] p-3">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#2f3233] bg-[#36393a] p-3">
             <div>
               <p className="text-sm text-stone-200">Colonne della griglia</p>
               <p className="mt-0.5 text-xs text-stone-500">Più colonne = più item per riga</p>
@@ -880,7 +885,7 @@ export default function WolvesvillePage() {
             <select
               value={String(colMode)}
               onChange={(e) => changeColMode(e.target.value)}
-              className="rounded-lg border border-[#3f3f45] bg-[#0e0e10] px-2 py-1 text-sm text-stone-200"
+              className="rounded-lg border border-[#4b4e50] bg-[#2a2d2d] px-2 py-1 text-sm text-stone-200"
             >
               <option value="auto">Auto</option>
               <option value="4">4</option>
@@ -890,7 +895,7 @@ export default function WolvesvillePage() {
               <option value="8">8</option>
             </select>
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#333338] bg-[#202024] p-3">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#2f3233] bg-[#36393a] p-3">
             <div>
               <p className="text-sm text-stone-200">Effetto Moonlight</p>
               <p className="mt-0.5 text-xs text-stone-500">
@@ -956,14 +961,14 @@ function GameAvatarPreview({
   const grave = slots.gravestoneId ? itemMap[slots.gravestoneId] : null;
 
   return (
-    <Card className="border-[#3a3a40] bg-[#202024]">
+    <Card className="border-[#2f3233] bg-[#36393a]">
       <CardContent className="p-4">
         <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
           Anteprima live · motore del gioco
         </h3>
         <div className="flex items-end justify-center gap-4">
           <div
-            className="relative w-[240px] overflow-hidden rounded-lg border border-[#333338] bg-[#0d0d0f]"
+            className="relative w-[240px] overflow-hidden rounded-lg border border-[#2f3233] bg-[#1e2123]"
             style={{ aspectRatio: AVATAR_BOX_RATIO }}
           >
             {layers.length === 0 ? (
@@ -971,12 +976,19 @@ function GameAvatarPreview({
                 Equipaggia un oggetto per vedere l&apos;umano
               </p>
             ) : (
-              layers.map((l) => <WovLayer key={l.key} spec={l} />)
+              <div
+                className="absolute bottom-0 left-1/2 h-full -translate-x-1/2"
+                style={{ width: "76%" }}
+              >
+                {layers.map((l) => (
+                  <WovLayer key={l.key} spec={l} />
+                ))}
+              </div>
             )}
           </div>
           {grave && (
             <div
-              className="relative w-[96px] rounded-lg border border-[#333338] bg-[#0d0d0f]"
+              className="relative w-[96px] rounded-lg border border-[#2f3233] bg-[#1e2123]"
               style={{ aspectRatio: "372 / 500" }}
             >
               <WovLayer

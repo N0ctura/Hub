@@ -227,33 +227,33 @@ export const RARITY_META: Record<
 > = {
   COMMON: {
     label: "Comune",
-    dot: "bg-slate-400",
-    text: "text-slate-300",
-    border: "border-slate-500/40",
+    dot: "bg-[#9e9e9e]",
+    text: "text-[#c3c6c8]",
+    border: "border-[#7d8083]",
   },
   RARE: {
     label: "Raro",
-    dot: "bg-blue-400",
-    text: "text-blue-300",
-    border: "border-blue-500/40",
+    dot: "bg-[#4f9be8]",
+    text: "text-[#7fbdf0]",
+    border: "border-[#4f9be8]",
   },
   EPIC: {
     label: "Epico",
-    dot: "bg-purple-400",
-    text: "text-purple-300",
-    border: "border-purple-500/40",
+    dot: "bg-[#9475cd]",
+    text: "text-[#b295e0]",
+    border: "border-[#9475cd]",
   },
   LEGENDARY: {
     label: "Leggendario",
-    dot: "bg-yellow-400",
-    text: "text-yellow-300",
-    border: "border-yellow-500/40",
+    dot: "bg-[#ffec3b]",
+    text: "text-[#ffec3b]",
+    border: "border-[#ffec3b]",
   },
   MYTHICAL: {
     label: "Mitic",
-    dot: "bg-red-400",
-    text: "text-red-300",
-    border: "border-red-500/40",
+    dot: "bg-[#ff4d4d]",
+    text: "text-[#ff6b6b]",
+    border: "border-[#ff4d4d]",
   },
 };
 

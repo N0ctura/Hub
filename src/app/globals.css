@@ -230,16 +230,16 @@
   background: transparent;
 }
 .wov-scroll::-webkit-scrollbar-thumb {
-  background: #3f3f45;
+  background: #4c4f53;
   border-radius: 999px;
 }
 .wov-scroll::-webkit-scrollbar-thumb:hover {
-  background: #ff2d78;
+  background: #ff4081;
 }
 .wov-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
 .wov-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #3f3f45 transparent;
+  scrollbar-color: #4c4f53 transparent;
 }

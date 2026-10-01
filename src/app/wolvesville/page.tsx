@@ -658,7 +658,7 @@ export default function WolvesvillePage() {
                       <button
                         type="button"
                         onClick={() => clearSlot(activeCategory.slotKey)}
-                        className={`flex aspect-square items-center justify-center rounded-lg border-2 text-xs transition-colors ${
+                        className={`flex aspect-[126/101] items-center justify-center rounded-lg border-2 text-xs transition-colors ${
                           !slots[activeCategory.slotKey]
                             ? "border-green-500 bg-[#484848] text-stone-100"
                             : "border-[#4b4e50] bg-[#484848] text-stone-400 hover:border-[#6b6e70]"
@@ -682,7 +682,7 @@ export default function WolvesvillePage() {
                           key={item.id}
                           type="button"
                           onClick={() => toggleEquip(activeCategory, item.id)}
-                          className={`relative flex aspect-square items-center justify-center rounded-lg border-2 bg-[#484848] p-2 transition-all ${
+                          className={`relative flex aspect-[126/101] items-center justify-center rounded-lg border-2 bg-[#484848] p-2 transition-all ${
                             selected
                               ? "border-green-500 ring-2 ring-green-500/40"
                               : `${meta.border} hover:border-[#6b6e70]`

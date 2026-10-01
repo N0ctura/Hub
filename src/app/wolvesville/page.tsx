@@ -29,7 +29,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   AVATAR_BOX_RATIO,
   buildAvatarLayers,
-  itemLayerUrl,
   layerWidthPercent,
   storeIconUrl,
   type WovLayerSpec,
@@ -67,7 +66,6 @@ const TYPE_ORDER: WovItemType[] = [
   "BADGE",
   "FRONT",
   "BACK",
-  "GRAVESTONE",
   "LEGS",
 ];
 
@@ -85,7 +83,6 @@ interface CreatorCategory {
 /* Categorie nell'ordine del gioco, con i doppioni Moonlight.
    Le icone sono quelle ufficiali dell'inventario di Wolvesville. */
 const CREATOR_CATEGORIES: CreatorCategory[] = [
-  { key: "grave", label: "Lapide", icon: "🪦", iconUrl: "inventory_tab_gravestones.png", slotKey: "gravestoneId", type: "GRAVESTONE" },
   { key: "hat", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats.png", slotKey: "hatId", type: "HAT" },
   { key: "hat2", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats_2.png", slotKey: "hatId2", type: "HAT", second: true },
   { key: "hair", label: "Capelli", icon: "💇", iconUrl: "inventory_tab_hair.png", slotKey: "hairId", type: "HAIR" },
@@ -417,8 +414,8 @@ export default function WolvesvillePage() {
       }`}
     >
       {/* Navbar */}
-      <nav className="border-b border-[#2c2c30] bg-[#222525]/95 p-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
+      <nav className="border-b border-[#2c2c30] bg-[#222525]/95 px-4 py-2 backdrop-blur-md">
+        <div className="flex w-full items-center justify-between px-3">
           <Link
             href="/"
             className="flex items-center gap-2 text-[#ff4081] transition-colors hover:text-[#ff5c9d]"
@@ -453,8 +450,8 @@ export default function WolvesvillePage() {
         </div>
       </nav>
 
-      <main className="mx-auto w-full max-w-6xl min-h-0 flex-1 px-4 pb-3 sm:px-6 lg:overflow-hidden">
-        <header className="pb-2 pt-5 text-center lg:pb-1 lg:pt-2">
+      <main className="w-full min-h-0 flex-1 px-2 pb-2 lg:overflow-hidden lg:overflow-hidden">
+        <header className="pb-2 pt-5 text-center lg:py-1">
           <h1 className="font-serif text-3xl font-black uppercase tracking-widest text-[#ff4081] drop-shadow-[0_0_15px_rgba(255,64,129,0.4)] lg:text-2xl">
             Wolvesville Studio
           </h1>
@@ -509,7 +506,7 @@ export default function WolvesvillePage() {
           </Card>
         ) : (
           <Tabs defaultValue="creator" onValueChange={setActiveTab} className="flex h-full min-h-0 flex-col">
-            <TabsList className="mx-auto mb-3 flex shrink-0 bg-[#36393a]">
+            <TabsList className="mx-auto mb-2 flex shrink-0 bg-[#36393a]">
               <TabsTrigger value="creator" className="data-[state=active]:text-[#ff4081]">
                 <Layers size={14} className="mr-1" /> Crea Skin
               </TabsTrigger>
@@ -525,14 +522,14 @@ export default function WolvesvillePage() {
 
             {/* ------------------------- CREA SKIN ------------------------- */}
             <TabsContent value="creator" className="min-h-0 flex-1 lg:h-full">
-              <div className="grid gap-6 lg:h-full lg:grid-cols-[380px_minmax(0,1fr)]">
+              <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(260px,29%)_minmax(0,1fr)]">
                 {/* Preview */}
-                <div className="wov-scroll space-y-4 lg:overflow-y-auto">
+                <div className="wov-scroll flex flex-col gap-3 lg:h-full lg:min-h-0 lg:overflow-y-auto">
                   <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
 
-                  <Card className="border-[#2f3233] bg-[#36393a]">
-                    <CardContent className="p-4">
-                      <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
+                  <Card className="shrink-0 border-[#2f3233] bg-[#36393a]">
+                    <CardContent className="p-3">
+                      <h3 className="mb-2 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
                         Scarica la skin
                       </h3>
                       <div className="flex items-center justify-center gap-2">
@@ -561,7 +558,7 @@ export default function WolvesvillePage() {
                   </Card>
 
                   {/* Salva skin */}
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <Input
                       value={skinName}
                       onChange={(e) => setSkinName(e.target.value)}
@@ -712,12 +709,11 @@ export default function WolvesvillePage() {
                     <div ref={sentinelRef} className="h-10" />
 
                   <p className="mt-3 text-[10px] leading-relaxed text-stone-600">
-                    * Maglia, Occhi e Lapide sono richiesti dal gioco per
-                    generare la skin. Il body paint è sempre presente (viene
-                    selezionato automaticamente: senza, l&apos;umano non
-                    esiste). I &quot;2° layer&quot; sono disponibili in-game
-                    solo per i membri Moonlight. Clicca di nuovo un oggetto
-                    equipaggiato per rimuoverlo.
+                    Il body paint è sempre presente (viene selezionato
+                    automaticamente: senza, l&apos;umano non esiste). I
+                    &quot;2° layer&quot; sono disponibili in-game solo per i
+                    membri Moonlight. Clicca di nuovo un oggetto equipaggiato
+                    per rimuoverlo.
                   </p>
                   </div>
                 </div>
@@ -916,7 +912,7 @@ export default function WolvesvillePage() {
 
 /* ------------- anteprima con il motore ufficiale del gioco ---------------- */
 
-function WovLayer({ spec, gravestone }: { spec: WovLayerSpec; gravestone?: boolean }) {
+function WovLayer({ spec }: { spec: WovLayerSpec }) {
   const [widthPct, setWidthPct] = useState<number | null>(null);
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -924,7 +920,7 @@ function WovLayer({ spec, gravestone }: { spec: WovLayerSpec; gravestone?: boole
       src={spec.url}
       alt=""
       draggable={false}
-      onLoad={(e) => setWidthPct(layerWidthPercent(e.currentTarget.naturalWidth, gravestone))}
+      onLoad={(e) => setWidthPct(layerWidthPercent(e.currentTarget.naturalWidth))}
       style={{
         position: "absolute",
         bottom: 0,
@@ -958,17 +954,15 @@ function GameAvatarPreview({
       ),
     [slots, itemMap, bodyPaints],
   );
-  const grave = slots.gravestoneId ? itemMap[slots.gravestoneId] : null;
-
   return (
-    <Card className="border-[#2f3233] bg-[#36393a]">
-      <CardContent className="p-4">
-        <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
+    <Card className="flex min-h-[200px] flex-1 flex-col border-[#2f3233] bg-[#36393a]">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-3">
+        <h3 className="mb-2 shrink-0 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
           Anteprima live · motore del gioco
         </h3>
-        <div className="flex items-end justify-center gap-4">
+        <div className="flex min-h-0 flex-1 items-end justify-center">
           <div
-            className="relative w-[240px] overflow-hidden rounded-lg border border-[#2f3233] bg-[#1e2123]"
+            className="relative h-full overflow-hidden rounded-lg border border-[#2f3233] bg-[#1e2123]"
             style={{ aspectRatio: AVATAR_BOX_RATIO }}
           >
             {layers.length === 0 ? (
@@ -986,19 +980,8 @@ function GameAvatarPreview({
               </div>
             )}
           </div>
-          {grave && (
-            <div
-              className="relative w-[96px] rounded-lg border border-[#2f3233] bg-[#1e2123]"
-              style={{ aspectRatio: "372 / 500" }}
-            >
-              <WovLayer
-                spec={{ key: "grave", url: itemLayerUrl(grave.imageUrl), z: 1 }}
-                gravestone
-              />
-            </div>
-          )}
         </div>
-        <p className="mt-2 text-center text-[10px] text-stone-600">
+        <p className="mt-2 shrink-0 text-center text-[10px] text-stone-500">
           Posizionamento identico al gioco: ancorato al fondo, centrato,
           scala 186 (ricostruito dal client ufficiale).
         </p>

@@ -138,19 +138,19 @@ export default function WolvesvillePage() {
   const [visibleCount, setVisibleCount] = useState(300);
   const [activeTab, setActiveTab] = useState("creator");
   const [sortMode, setSortMode] = useState<"name" | "rarity-desc" | "rarity-asc">("name");
-  const [colMode, setColMode] = useState<"auto" | 4 | 5 | 6 | 7 | 8>("auto");
+  const [colMode, setColMode] = useState(5);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("wov_columns");
-    if (saved && saved !== "auto") setColMode(Number(saved) as 4 | 5 | 6 | 7 | 8);
+    const saved = Number(window.localStorage.getItem("wov_columns"));
+    if (saved >= 3 && saved <= 12) setColMode(saved);
   }, []);
 
   const changeColMode = (v: string) => {
-    const next = v === "auto" ? ("auto" as const) : (Number(v) as 4 | 5 | 6 | 7 | 8);
+    const next = Math.min(12, Math.max(3, Number(v) || 5));
     setColMode(next);
     try {
-      window.localStorage.setItem("wov_columns", v);
+      window.localStorage.setItem("wov_columns", String(next));
     } catch {
       /* ignore */
     }
@@ -652,7 +652,7 @@ export default function WolvesvillePage() {
                   <div className="wov-scroll min-h-0 flex-1 p-2 lg:overflow-y-auto">
                   <div
                     className="grid gap-1"
-                    style={{ gridTemplateColumns: colMode === "auto" ? "repeat(auto-fill, minmax(64px, 1fr))" : `repeat(${colMode}, minmax(0, 1fr))` }}
+                    style={{ gridTemplateColumns: `repeat(${colMode}, minmax(0, 1fr))` }}
                   >
                     {!activeCategory.isBodyPaint && (
                       <button
@@ -883,12 +883,11 @@ export default function WolvesvillePage() {
               onChange={(e) => changeColMode(e.target.value)}
               className="rounded-lg border border-[#4b4e50] bg-[#2a2d2d] px-2 py-1 text-sm text-stone-200"
             >
-              <option value="auto">Auto</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
+              {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+                <option key={n} value={n}>
+                  {n} colonne
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-lg border border-[#2f3233] bg-[#36393a] p-3">

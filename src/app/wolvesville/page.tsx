@@ -11,14 +11,21 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings,
   PawPrint,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   AVATAR_BOX_RATIO,
   buildAvatarLayers,
@@ -30,7 +37,6 @@ import {
 import {
   RARITY_META,
   RARITY_ORDER,
-  REQUIRED_SLOT_KEYS,
   TYPE_LABELS,
   WOV_SLOTS,
   createSharedAvatar,
@@ -46,7 +52,6 @@ import {
   type WovAvatarSlots,
   type WovBodyPaint,
   type WovItemType,
-  type WovSharedAvatar,
 } from "@/lib/wov-api";
 
 type ItemMap = Record<string, WovAvatarItem>;
@@ -115,9 +120,9 @@ export default function WolvesvillePage() {
 
   /* ------------------------------- creator ------------------------------- */
   const [slots, setSlots] = useState<WovAvatarSlots>({});
-  const [shared, setShared] = useState<WovSharedAvatar | null>(null);
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [moonlight, setMoonlight] = useState(true);
+  const [exporting, setExporting] = useState<0 | 1 | 2 | 3>(0);
 
   /* ------------------------------- catalogo ------------------------------ */
   const [catalogType, setCatalogType] = useState<WovItemType>("SHIRT");
@@ -141,8 +146,6 @@ export default function WolvesvillePage() {
     }
     return map;
   }, [items, bodyPaints]);
-
-  const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ---------------------------- caricamento ------------------------------ */
 
@@ -176,35 +179,31 @@ export default function WolvesvillePage() {
 
   useEffect(() => {
     setSavedSkins(loadSavedSkins());
+    setMoonlight(window.localStorage.getItem("wov_moonlight") !== "off");
     if (apiKey) void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadAll]);
 
-  /* --------------------- render ufficiale (debounce) --------------------- */
+  /* ---------------------------- impostazioni ------------------------------ */
 
-  const missingRequired = REQUIRED_SLOT_KEYS.filter((key) => !slots[key]);
-
-  useEffect(() => {
-    if (!apiKey || loadingData) return;
-    if (missingRequired.length > 0) return;
-    if (renderTimer.current) clearTimeout(renderTimer.current);
-    renderTimer.current = setTimeout(async () => {
-      setRendering(true);
-      setRenderError(null);
-      try {
-        const result = await createSharedAvatar(slots);
-        setShared(result);
-      } catch (err) {
-        setRenderError(err instanceof Error ? err.message : "Errore di render");
-      } finally {
-        setRendering(false);
-      }
-    }, 1200);
-    return () => {
-      if (renderTimer.current) clearTimeout(renderTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, apiKey, loadingData]);
+  const toggleMoonlight = (on: boolean) => {
+    setMoonlight(on);
+    try {
+      window.localStorage.setItem("wov_moonlight", on ? "on" : "off");
+    } catch {
+      /* ignore */
+    }
+    if (!on) {
+      // svuota tutti gli slot doppi (2° layer)
+      setSlots((prev) => {
+        const next: WovAvatarSlots = { ...prev };
+        for (const k of Object.keys(next)) {
+          if (k.endsWith("2")) next[k] = null;
+        }
+        return next;
+      });
+    }
+  };
 
   /* ------------------------------ azioni --------------------------------- */
 
@@ -219,12 +218,84 @@ export default function WolvesvillePage() {
     setSlots((prev) => ({ ...prev, [slotKey]: null }));
   };
 
+  /* ------------------------- download della skin -------------------------- */
+
+  // Il CDN di Wolvesville non manda header CORS: per comporre la skin nel
+  // canvas (e poterla scaricare, anche su iPhone) le immagini per l'export
+  // passano da un proxy che espone CORS. In caso di errore usiamo il render
+  // ufficiale dell'API come ultima spiaggia.
+  const loadExportImage = (url: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        const proxied = new Image();
+        proxied.crossOrigin = "anonymous";
+        proxied.onload = () => resolve(proxied);
+        proxied.onerror = () => reject(new Error("Immagine non caricabile"));
+        proxied.src = `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=png`;
+      };
+      img.src = url;
+    });
+
+  const downloadSkin = async (scale: 1 | 2 | 3) => {
+    setExporting(scale);
+    try {
+      const layers = buildAvatarLayers(
+        slots,
+        (id) => (id ? itemMap[id]?.imageUrl : undefined),
+        (id) => (id ? bodyPaints.find((b) => b.id === id)?.imageUrl : undefined),
+        scale === 3 ? 3 : 2,
+      );
+      if (layers.length === 0) throw new Error("Nessun oggetto equipaggiato");
+      const canvas = document.createElement("canvas");
+      canvas.width = 372 * scale;
+      canvas.height = 900 * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas non disponibile");
+      const density = scale === 3 ? 3 : 2;
+      for (const layer of layers) {
+        const img = await loadExportImage(layer.url);
+        const drawnW = (img.naturalWidth / density) * scale;
+        const drawnH = drawnW * (img.naturalHeight / img.naturalWidth);
+        ctx.drawImage(
+          img,
+          (canvas.width - drawnW) / 2,
+          canvas.height - drawnH,
+          drawnW,
+          drawnH,
+        );
+      }
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      if (!blob) throw new Error("Export non riuscito");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${skinName.trim() || "wov-skin"}-${scale}x.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch {
+      // Fallback: render ufficiale dell'API (server-side, zero problemi CORS)
+      try {
+        const shared = await createSharedAvatar(slots);
+        window.open(shared.avatar.url.replace(".png", "@3x.png"), "_blank");
+      } catch {
+        alert("Download non riuscito: equipaggia almeno un oggetto e riprova.");
+      }
+    } finally {
+      setExporting(0);
+    }
+  };
+
   const saveSkin = () => {
     const name = skinName.trim() || `Skin ${savedSkins.length + 1}`;
     const skin: SavedSkin = {
       name,
       slots: { ...slots },
-      sharedId: shared?.id,
       savedAt: Date.now(),
     };
     const next = [skin, ...savedSkins].slice(0, 30);
@@ -305,6 +376,15 @@ export default function WolvesvillePage() {
             <span>WOV STUDIO</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSettingsOpen(true)}
+              className="text-stone-400 hover:text-violet-300"
+            >
+              <Settings size={16} />
+              <span className="ml-1.5 hidden text-xs sm:inline">Impostazioni</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -390,67 +470,40 @@ export default function WolvesvillePage() {
 
             {/* ------------------------- CREA SKIN ------------------------- */}
             <TabsContent value="creator">
-              <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+              <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
                 {/* Preview */}
                 <div className="space-y-4">
+                  <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
+
                   <Card className="border-violet-500/30 bg-stone-900">
                     <CardContent className="p-4">
                       <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-violet-300">
-                        Render ufficiale
+                        Scarica la skin
                       </h3>
-                      <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-stone-800 bg-stone-950 p-2">
-                        {rendering ? (
-                          <Loader2 className="animate-spin text-violet-400" size={32} />
-                        ) : shared ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={shared.avatar.url.replace(".png", "@3x.png")}
-                            alt="Skin renderizzata"
-                            className="max-h-[300px] object-contain"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = shared.avatar.url;
-                            }}
-                          />
-                        ) : missingRequired.length > 0 ? (
-                          <p className="px-4 text-center text-xs text-stone-500">
-                            Scegli almeno{" "}
-                            <b className="text-stone-300">
-                              {missingRequired
-                                .map((k) => WOV_SLOTS.find((s) => s.key === k)?.label)
-                                .filter(Boolean)
-                                .join(", ")}
-                            </b>{" "}
-                            per vedere l&apos;anteprima ufficiale.
-                          </p>
-                        ) : (
-                          <p className="text-center text-xs text-stone-500">
-                            Render in arrivo...
-                          </p>
-                        )}
+                      <div className="flex items-center justify-center gap-2">
+                        {([1, 2, 3] as const).map((q) => (
+                          <Button
+                            key={q}
+                            size="sm"
+                            disabled={exporting !== 0}
+                            onClick={() => void downloadSkin(q)}
+                            className="bg-violet-600 hover:bg-violet-500"
+                          >
+                            {exporting === q ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Download size={14} className="mr-1" />
+                            )}
+                            {q}x
+                          </Button>
+                        ))}
                       </div>
-                      {renderError && (
-                        <p className="mt-2 text-center text-xs text-red-400">{renderError}</p>
-                      )}
-                      {shared && (
-                        <div className="mt-3 flex items-center justify-center gap-2">
-                          <a href={shared.avatar.url} target="_blank" rel="noreferrer">
-                            <Button
-                              size="sm"
-                              className="bg-violet-600 hover:bg-violet-500"
-                            >
-                              <Download size={14} className="mr-1" /> PNG
-                            </Button>
-                          </a>
-                          <Badge variant="outline" className="border-stone-700 text-[10px] text-stone-400">
-                            ID: {shared.id.slice(0, 8)}…
-                          </Badge>
-                        </div>
-                      )}
+                      <p className="mt-2 text-center text-[10px] text-stone-500">
+                        1x piccola · 2x nitida · 3x qualità massima (@3x). PNG
+                        con sfondo trasparente, compatibile anche con iPhone.
+                      </p>
                     </CardContent>
                   </Card>
-
-                  <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
 
                   {/* Salva skin */}
                   <div className="flex gap-2">
@@ -473,7 +526,7 @@ export default function WolvesvillePage() {
                 {/* Editor stile Wolvesville */}
                 <div>
                   <div className="mb-2 flex gap-1.5 overflow-x-auto pb-2">
-                    {CREATOR_CATEGORIES.map((cat) => {
+                    {CREATOR_CATEGORIES.filter((c) => moonlight || !c.second).map((cat) => {
                       const activeCat = creatorCat === cat.key;
                       const filled = !!slots[cat.slotKey];
                       return (
@@ -725,7 +778,6 @@ export default function WolvesvillePage() {
                         variant="outline"
                         onClick={() => {
                           setSlots({ ...skin.slots });
-                          setShared(null);
                         }}
                         className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10"
                       >
@@ -748,6 +800,27 @@ export default function WolvesvillePage() {
         )}
       </main>
 
+      {/* Impostazioni */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="border-violet-500/30 bg-stone-950 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-violet-300">Impostazioni</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-stone-800 bg-stone-900 p-3">
+            <div>
+              <p className="text-sm text-stone-200">Effetto Moonlight</p>
+              <p className="mt-0.5 text-xs text-stone-500">
+                Mostra le categorie con doppio layer (2°). Disattivandolo, gli
+                slot 2° vengono svuotati.
+              </p>
+            </div>
+            <Switch checked={moonlight} onCheckedChange={toggleMoonlight} />
+          </div>
+          <p className="text-[10px] text-stone-600">
+            Altre impostazioni in arrivo (sfondi, versione mobile...).
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -806,7 +879,7 @@ function GameAvatarPreview({
         </h3>
         <div className="flex items-end justify-center gap-4">
           <div
-            className="relative w-[210px] rounded-lg border border-stone-800 bg-stone-950/70"
+            className="relative w-[210px] overflow-hidden rounded-lg border border-stone-800 bg-stone-950/70"
             style={{ aspectRatio: AVATAR_BOX_RATIO }}
           >
             {layers.length === 0 ? (

@@ -28,24 +28,29 @@ function slugFromStoreUrl(storeUrl: string): string {
   return file.replace(/\.store\.png.*$/i, "");
 }
 
-/** URL del layer avatar-large@2x di un item, ricavato dalla store icon. */
-export function itemLayerUrl(storeUrl: string): string {
+/** URL del layer avatar-large di un item, ricavato dalla store icon. */
+export function itemLayerUrl(storeUrl: string, density: 1 | 2 | 3 = 2): string {
   const slug = slugFromStoreUrl(storeUrl);
-  return `https://cdn2.wolvesville.com/avatarItems/${slug}.avatar-large@2x.png`;
+  const suffix = density === 1 ? "" : `@${density}x`;
+  return `https://cdn2.wolvesville.com/avatarItems/${slug}.avatar-large${suffix}.png`;
 }
 
 /** I bodyPaint hanno 3 parti: body-, head-, mouth- + slug. */
-export function bodyPaintLayerUrls(storeUrl: string): {
+export function bodyPaintLayerUrls(
+  storeUrl: string,
+  density: 1 | 2 | 3 = 2,
+): {
   body: string;
   head: string;
   mouth: string;
 } {
   const slug = slugFromStoreUrl(storeUrl);
+  const suffix = density === 1 ? "" : `@${density}x`;
   const base = "https://cdn2.wolvesville.com/bodyPaints";
   return {
-    body: `${base}/body-${slug}.avatar-large@2x.png`,
-    head: `${base}/head-${slug}.avatar-large@2x.png`,
-    mouth: `${base}/mouth-${slug}.avatar-large@2x.png`,
+    body: `${base}/body-${slug}.avatar-large${suffix}.png`,
+    head: `${base}/head-${slug}.avatar-large${suffix}.png`,
+    mouth: `${base}/mouth-${slug}.avatar-large${suffix}.png`,
   };
 }
 
@@ -77,44 +82,47 @@ export function buildAvatarLayers(
   slots: WovAvatarSlots,
   getItemStoreUrl: (id: string | null | undefined) => string | undefined,
   getBodyPaintStoreUrl: (id: string | null | undefined) => string | undefined,
+  density: 1 | 2 | 3 = 2,
 ): WovLayerSpec[] {
   const layers: WovLayerSpec[] = [];
   const push = (key: string, url: string | undefined, z: number) => {
     if (url) layers.push({ key, url, z });
   };
 
-  const bpUrls = getBodyPaintStoreUrl(slots.bodyPaintId)
-    ? bodyPaintLayerUrls(getBodyPaintStoreUrl(slots.bodyPaintId) as string)
-    : null;
+  const bpStore = getBodyPaintStoreUrl(slots.bodyPaintId);
+  const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, density) : null;
 
-  push("back", itemLayerUrlIf(getItemStoreUrl(slots.backId)), 1);
-  push("back2", itemLayerUrlIf(getItemStoreUrl(slots.backId2)), 2);
+  push("back", itemLayerUrlIf(getItemStoreUrl(slots.backId), density), 1);
+  push("back2", itemLayerUrlIf(getItemStoreUrl(slots.backId2), density), 2);
   if (bpUrls) push("body", bpUrls.body, 3);
-  push("shirt", itemLayerUrlIf(getItemStoreUrl(slots.shirtId)), 4);
-  push("shirt2", itemLayerUrlIf(getItemStoreUrl(slots.shirtId2)), 5);
-  push("badge", itemLayerUrlIf(getItemStoreUrl(slots.badgeId)), 6);
-  push("badge2", itemLayerUrlIf(getItemStoreUrl(slots.badgeId2)), 7);
+  push("shirt", itemLayerUrlIf(getItemStoreUrl(slots.shirtId), density), 4);
+  push("shirt2", itemLayerUrlIf(getItemStoreUrl(slots.shirtId2), density), 5);
+  push("badge", itemLayerUrlIf(getItemStoreUrl(slots.badgeId), density), 6);
+  push("badge2", itemLayerUrlIf(getItemStoreUrl(slots.badgeId2), density), 7);
   if (bpUrls) push("head", bpUrls.head, 8);
-  const mouthUrl = itemLayerUrlIf(getItemStoreUrl(slots.mouthId));
+  const mouthUrl = itemLayerUrlIf(getItemStoreUrl(slots.mouthId), density);
   if (mouthUrl) push("mouth", mouthUrl, 9);
   else if (bpUrls) push("mouth", bpUrls.mouth, 9);
-  push("mouth2", itemLayerUrlIf(getItemStoreUrl(slots.mouthId2)), 10);
-  push("eyes", itemLayerUrlIf(getItemStoreUrl(slots.eyesId)), 11);
-  push("eyes2", itemLayerUrlIf(getItemStoreUrl(slots.eyesId2)), 12);
-  push("hair", itemLayerUrlIf(getItemStoreUrl(slots.hairId)), 13);
-  push("hair2", itemLayerUrlIf(getItemStoreUrl(slots.hairId2)), 14);
-  push("mask", itemLayerUrlIf(getItemStoreUrl(slots.maskId)), 15);
-  push("mask2", itemLayerUrlIf(getItemStoreUrl(slots.maskId2)), 16);
-  push("glasses", itemLayerUrlIf(getItemStoreUrl(slots.glassesId)), 17);
-  push("glasses2", itemLayerUrlIf(getItemStoreUrl(slots.glassesId2)), 18);
-  push("hat", itemLayerUrlIf(getItemStoreUrl(slots.hatId)), 19);
-  push("hat2", itemLayerUrlIf(getItemStoreUrl(slots.hatId2)), 20);
-  push("front", itemLayerUrlIf(getItemStoreUrl(slots.frontId)), 21);
-  push("front2", itemLayerUrlIf(getItemStoreUrl(slots.frontId2)), 22);
+  push("mouth2", itemLayerUrlIf(getItemStoreUrl(slots.mouthId2), density), 10);
+  push("eyes", itemLayerUrlIf(getItemStoreUrl(slots.eyesId), density), 11);
+  push("eyes2", itemLayerUrlIf(getItemStoreUrl(slots.eyesId2), density), 12);
+  push("hair", itemLayerUrlIf(getItemStoreUrl(slots.hairId), density), 13);
+  push("hair2", itemLayerUrlIf(getItemStoreUrl(slots.hairId2), density), 14);
+  push("mask", itemLayerUrlIf(getItemStoreUrl(slots.maskId), density), 15);
+  push("mask2", itemLayerUrlIf(getItemStoreUrl(slots.maskId2), density), 16);
+  push("glasses", itemLayerUrlIf(getItemStoreUrl(slots.glassesId), density), 17);
+  push("glasses2", itemLayerUrlIf(getItemStoreUrl(slots.glassesId2), density), 18);
+  push("hat", itemLayerUrlIf(getItemStoreUrl(slots.hatId), density), 19);
+  push("hat2", itemLayerUrlIf(getItemStoreUrl(slots.hatId2), density), 20);
+  push("front", itemLayerUrlIf(getItemStoreUrl(slots.frontId), density), 21);
+  push("front2", itemLayerUrlIf(getItemStoreUrl(slots.frontId2), density), 22);
 
   return layers;
 }
 
-function itemLayerUrlIf(storeUrl: string | undefined): string | undefined {
-  return storeUrl ? itemLayerUrl(storeUrl) : undefined;
+function itemLayerUrlIf(
+  storeUrl: string | undefined,
+  density: 1 | 2 | 3,
+): string | undefined {
+  return storeUrl ? itemLayerUrl(storeUrl, density) : undefined;
 }

@@ -4,7 +4,6 @@
 
 export const API_BASE = "https://api.wolvesville.com";
 
-const KEY_STORAGE = "wov_api_key";
 const CACHE_PREFIX = "wov_cache_";
 const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 ore
 
@@ -69,18 +68,13 @@ export class WovApiError extends Error {
 }
 
 /* ------------------------------- API key ------------------------------- */
+// La chiave viene iniettata a build time dal secret GitHub WOLVESVILLE_API_KEY
+// (nel workflow: NEXT_PUBLIC_WOV_API_KEY=${{ secrets.WOLVESVILLE_API_KEY }}).
+// Per lo sviluppo locale basta un file .env.local con la stessa variabile.
 
 export function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(KEY_STORAGE);
-}
-
-export function setApiKey(key: string): void {
-  window.localStorage.setItem(KEY_STORAGE, key.trim());
-}
-
-export function clearApiKey(): void {
-  window.localStorage.removeItem(KEY_STORAGE);
+  const key = process.env.NEXT_PUBLIC_WOV_API_KEY;
+  return key && key.trim() ? key.trim() : null;
 }
 
 /* ------------------------------- fetch --------------------------------- */

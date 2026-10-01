@@ -29,6 +29,10 @@ jobs:
         run: npm install
       - name: Build with Next.js
         run: npm run build
+        env:
+          # Wolvesville Public API key, injected at build time.
+          # Set it in: Repo Settings → Secrets and variables → Actions
+          NEXT_PUBLIC_WOV_API_KEY: ${{ secrets.WOLVESVILLE_API_KEY }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

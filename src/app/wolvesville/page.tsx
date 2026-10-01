@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Download,
-  KeyRound,
   Layers,
   Loader2,
   Moon,
@@ -21,12 +20,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ItemPickerDialog } from "@/components/wolvesville/item-picker-dialog";
 import {
@@ -35,7 +28,6 @@ import {
   REQUIRED_SLOT_KEYS,
   TYPE_LABELS,
   WOV_SLOTS,
-  clearApiKey,
   createSharedAvatar,
   eventLabel,
   fetchAvatarItems,
@@ -44,7 +36,6 @@ import {
   getApiKey,
   loadSavedSkins,
   persistSavedSkins,
-  setApiKey,
   type SavedSkin,
   type WovAvatarItem,
   type WovAvatarSlots,
@@ -72,9 +63,8 @@ const TYPE_ORDER: WovItemType[] = [
 
 export default function WolvesvillePage() {
   /* ------------------------------ stato base ----------------------------- */
-  const [apiKey, setApiKeyState] = useState<string | null>(null);
-  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
-  const [keyInput, setKeyInput] = useState("");
+  // Chiave API iniettata a build time dal secret GitHub WOLVESVILLE_API_KEY.
+  const apiKey = getApiKey();
 
   const [items, setItems] = useState<WovAvatarItem[]>([]);
   const [bodyPaints, setBodyPaints] = useState<WovBodyPaint[]>([]);
@@ -132,10 +122,9 @@ export default function WolvesvillePage() {
   }, []);
 
   useEffect(() => {
-    const key = getApiKey();
-    setApiKeyState(key);
     setSavedSkins(loadSavedSkins());
-    if (key) void loadAll();
+    if (apiKey) void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadAll]);
 
   /* --------------------- render ufficiale (debounce) --------------------- */
@@ -165,15 +154,6 @@ export default function WolvesvillePage() {
   }, [slots, apiKey, loadingData]);
 
   /* ------------------------------ azioni --------------------------------- */
-
-  const saveKey = () => {
-    if (!keyInput.trim()) return;
-    setApiKey(keyInput);
-    setApiKeyState(keyInput.trim());
-    setKeyDialogOpen(false);
-    setKeyInput("");
-    void loadAll(true);
-  };
 
   const equipItem = (item: WovAvatarItem) => {
     const slotDef = WOV_SLOTS.find((s) => s.type === item.type);
@@ -276,15 +256,6 @@ export default function WolvesvillePage() {
             >
               <RefreshCw size={14} />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setKeyDialogOpen(true)}
-              className="text-stone-400 hover:text-violet-300"
-            >
-              <KeyRound size={14} />
-              <span className="ml-1.5 hidden text-xs sm:inline">API</span>
-            </Button>
           </div>
         </div>
       </nav>
@@ -306,28 +277,25 @@ export default function WolvesvillePage() {
             <CardContent className="p-6 text-center">
               <Moon className="mx-auto mb-4 text-violet-400" size={40} />
               <h2 className="mb-2 text-xl font-bold text-violet-300">
-                Collega la tua API key
+                API key non configurata
               </h2>
-              <ol className="mx-auto mb-4 max-w-md space-y-1 text-left text-sm text-stone-400">
-                <li>1. Apri Wolvesville → Impostazioni → <b>Wolvesville Public API</b></li>
-                <li>2. Crea il tuo bot (costa 100 gemme, una sola volta)</li>
-                <li>3. Copia la <b>API key</b> e incollala qui sotto</li>
+              <p className="mx-auto mb-4 max-w-md text-sm text-stone-400">
+                Il sito usa la Wolvesville Public API con la chiave del
+                proprietario, iniettata automaticamente alla build dai GitHub
+                Secrets.
+              </p>
+              <ol className="mx-auto max-w-md space-y-1 text-left text-sm text-stone-400">
+                <li>1. Apri il repository GitHub → <b>Settings</b></li>
+                <li>2. <b>Secrets and variables</b> → Actions → <b>New repository secret</b></li>
+                <li>
+                  3. Nome: <code className="text-violet-300">WOLVESVILLE_API_KEY</code>,
+                  valore: la tua API key
+                </li>
+                <li>4. Fai ripartire il deploy (push o re-run dell&apos;action)</li>
               </ol>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="Incolla qui la tua API key..."
-                  className="border-stone-700 bg-stone-900 text-stone-200"
-                />
-                <Button onClick={saveKey} className="bg-violet-600 hover:bg-violet-500">
-                  Collega
-                </Button>
-              </div>
               <p className="mt-3 text-xs text-stone-500">
-                La chiave resta solo nel tuo browser (localStorage): non viene
-                mai salvata nel codice o su GitHub.
+                Per provare in locale: crea un file .env.local con
+                NEXT_PUBLIC_WOV_API_KEY=la-tua-chiave e rifai la build.
               </p>
             </CardContent>
           </Card>
@@ -342,19 +310,6 @@ export default function WolvesvillePage() {
                   className="border-stone-700 text-stone-300"
                 >
                   <RefreshCw size={14} className="mr-1" /> Riprova
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    clearApiKey();
-                    setApiKeyState(null);
-                    setItems([]);
-                    setBodyPaints([]);
-                    setTags({});
-                  }}
-                  className="border-stone-700 text-stone-300"
-                >
-                  Cambia API key
                 </Button>
               </div>
             </CardContent>
@@ -697,52 +652,6 @@ export default function WolvesvillePage() {
         onSelect={(item) => pickerSlot && setSlot(pickerSlot, item)}
       />
 
-      {/* Dialog API key */}
-      <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
-        <DialogContent className="border-violet-500/30 bg-stone-950 sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-violet-300">
-              API key di Wolvesville
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-xs leading-relaxed text-stone-400">
-            La chiave è salvata solo nel tuo browser. Per ottenerne una:
-            Wolvesville → Impostazioni → Wolvesville Public API → crea il bot
-            (100 gemme) e copia la API key.
-          </p>
-          <Input
-            type="password"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="Nuova API key..."
-            className="border-stone-700 bg-stone-900 text-stone-200"
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                clearApiKey();
-                setApiKeyState(null);
-                setKeyDialogOpen(false);
-                setItems([]);
-                setBodyPaints([]);
-                setTags({});
-              }}
-              className="border-stone-700 text-stone-300"
-            >
-              Rimuovi chiave
-            </Button>
-            <Button
-              size="sm"
-              onClick={saveKey}
-              className="bg-violet-600 hover:bg-violet-500"
-            >
-              Salva
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

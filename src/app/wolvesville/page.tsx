@@ -27,6 +27,7 @@ import {
   buildAvatarLayers,
   itemLayerUrl,
   layerWidthPercent,
+  storeIconUrl,
   type WovLayerSpec,
 } from "@/lib/wov-avatar";
 import {
@@ -437,7 +438,7 @@ export default function WolvesvillePage() {
                               {item ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                  src={item.imageUrl}
+                                  src={storeIconUrl(item.imageUrl)}
                                   alt={item.title ?? item.id}
                                   className="max-h-8 max-w-8 object-contain"
                                 />
@@ -565,7 +566,7 @@ export default function WolvesvillePage() {
                     <CardContent className="flex flex-col items-center p-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={item.imageUrl}
+                        src={storeIconUrl(item.imageUrl)}
                         alt={item.title ?? item.id}
                         className="h-16 w-full object-contain"
                         loading="lazy"

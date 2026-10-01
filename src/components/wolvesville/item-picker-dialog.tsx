@@ -17,6 +17,7 @@ import {
   type WovAvatarItem,
   type WovItemType,
 } from "@/lib/wov-api";
+import { storeIconUrl } from "@/lib/wov-avatar";
 
 interface ItemPickerDialogProps {
   open: boolean;
@@ -113,7 +114,7 @@ export function ItemPickerDialog({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={item.imageUrl}
+                    src={storeIconUrl(item.imageUrl)}
                     alt={item.title ?? item.id}
                     className="h-14 w-full object-contain"
                     loading="lazy"

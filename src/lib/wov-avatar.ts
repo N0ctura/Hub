@@ -48,6 +48,14 @@ export function bodyPaintLayerUrls(storeUrl: string): {
   };
 }
 
+/** Icona del negozio in alta qualità: versione @2x su cdn2 (come il gioco). */
+export function storeIconUrl(storeUrl: string): string {
+  const file = storeUrl.split("/").pop() ?? "";
+  const slug = file.replace(/\.store\.png.*$/i, "");
+  const dir = storeUrl.includes("/bodyPaints/") ? "bodyPaints" : "avatarItems";
+  return `https://cdn2.wolvesville.com/${dir}/${slug}.store@2x.png`;
+}
+
 /** Larghezza del layer in % della larghezza del contenitore. */
 export function layerWidthPercent(natural2xWidth: number, gravestone = false): number {
   return ((natural2xWidth / 372) * 100) * (gravestone ? GRAVESTONE_SCALE : 1);

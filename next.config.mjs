@@ -9,6 +9,8 @@ const basePath = isProd ? '/Hub' : '';
 const nextConfig = {
   output: 'export',
   basePath,
+  // Espone il basePath anche al client (per gli asset di public/)
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
   images: {
     unoptimized: true,
   },

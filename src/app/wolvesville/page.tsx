@@ -75,36 +75,38 @@ interface CreatorCategory {
   key: string;
   label: string;
   icon: string;
+  iconUrl: string;
   slotKey: string;
   type?: WovItemType;
   isBodyPaint?: boolean;
   second?: boolean;
 }
 
-/* Categorie nell'ordine del gioco, con i doppioni Moonlight */
+/* Categorie nell'ordine del gioco, con i doppioni Moonlight.
+   Le icone sono quelle ufficiali dell'inventario di Wolvesville. */
 const CREATOR_CATEGORIES: CreatorCategory[] = [
-  { key: "grave", label: "Lapide", icon: "🪦", slotKey: "gravestoneId", type: "GRAVESTONE" },
-  { key: "hat", label: "Cappello", icon: "🎩", slotKey: "hatId", type: "HAT" },
-  { key: "hat2", label: "Cappello", icon: "🎩", slotKey: "hatId2", type: "HAT", second: true },
-  { key: "hair", label: "Capelli", icon: "💇", slotKey: "hairId", type: "HAIR" },
-  { key: "hair2", label: "Capelli", icon: "💇", slotKey: "hairId2", type: "HAIR", second: true },
-  { key: "eyes", label: "Occhi", icon: "👁️", slotKey: "eyesId", type: "EYES" },
-  { key: "eyes2", label: "Occhi", icon: "👁️", slotKey: "eyesId2", type: "EYES", second: true },
-  { key: "glasses", label: "Occhiali", icon: "👓", slotKey: "glassesId", type: "GLASSES" },
-  { key: "glasses2", label: "Occhiali", icon: "👓", slotKey: "glassesId2", type: "GLASSES", second: true },
-  { key: "shirt", label: "Maglia", icon: "👕", slotKey: "shirtId", type: "SHIRT" },
-  { key: "shirt2", label: "Maglia", icon: "👕", slotKey: "shirtId2", type: "SHIRT", second: true },
-  { key: "mouth", label: "Bocca", icon: "👄", slotKey: "mouthId", type: "MOUTH" },
-  { key: "mouth2", label: "Bocca", icon: "👄", slotKey: "mouthId2", type: "MOUTH", second: true },
-  { key: "mask", label: "Maschera", icon: "🎭", slotKey: "maskId", type: "MASK" },
-  { key: "mask2", label: "Maschera", icon: "🎭", slotKey: "maskId2", type: "MASK", second: true },
-  { key: "back", label: "Dietro", icon: "🎒", slotKey: "backId", type: "BACK" },
-  { key: "back2", label: "Dietro", icon: "🎒", slotKey: "backId2", type: "BACK", second: true },
-  { key: "front", label: "Davanti", icon: "🎁", slotKey: "frontId", type: "FRONT" },
-  { key: "front2", label: "Davanti", icon: "🎁", slotKey: "frontId2", type: "FRONT", second: true },
-  { key: "badge", label: "Badge", icon: "🏅", slotKey: "badgeId", type: "BADGE" },
-  { key: "badge2", label: "Badge", icon: "🏅", slotKey: "badgeId2", type: "BADGE", second: true },
-  { key: "paint", label: "Body Paint", icon: "🖌️", slotKey: "bodyPaintId", isBodyPaint: true },
+  { key: "grave", label: "Lapide", icon: "🪦", iconUrl: "inventory_tab_gravestones.png", slotKey: "gravestoneId", type: "GRAVESTONE" },
+  { key: "hat", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats.png", slotKey: "hatId", type: "HAT" },
+  { key: "hat2", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats_2.png", slotKey: "hatId2", type: "HAT", second: true },
+  { key: "hair", label: "Capelli", icon: "💇", iconUrl: "inventory_tab_hair.png", slotKey: "hairId", type: "HAIR" },
+  { key: "hair2", label: "Capelli", icon: "💇", iconUrl: "inventory_tab_hair.png", slotKey: "hairId2", type: "HAIR", second: true },
+  { key: "eyes", label: "Occhi", icon: "👁️", iconUrl: "inventory_tab_eyes.png", slotKey: "eyesId", type: "EYES" },
+  { key: "eyes2", label: "Occhi", icon: "👁️", iconUrl: "inventory_tab_eyes.png", slotKey: "eyesId2", type: "EYES", second: true },
+  { key: "glasses", label: "Occhiali", icon: "👓", iconUrl: "inventory_tab_glasses.png", slotKey: "glassesId", type: "GLASSES" },
+  { key: "glasses2", label: "Occhiali", icon: "👓", iconUrl: "inventory_tab_glasses_2.png", slotKey: "glassesId2", type: "GLASSES", second: true },
+  { key: "shirt", label: "Maglia", icon: "👕", iconUrl: "inventory_tab_clothes.png", slotKey: "shirtId", type: "SHIRT" },
+  { key: "shirt2", label: "Maglia", icon: "👕", iconUrl: "inventory_tab_clothes.png", slotKey: "shirtId2", type: "SHIRT", second: true },
+  { key: "mouth", label: "Bocca", icon: "👄", iconUrl: "inventory_tab_mouth.png", slotKey: "mouthId", type: "MOUTH" },
+  { key: "mouth2", label: "Bocca", icon: "👄", iconUrl: "inventory_tab_mouth.png", slotKey: "mouthId2", type: "MOUTH", second: true },
+  { key: "mask", label: "Maschera", icon: "🎭", iconUrl: "inventory_tab_mask.png", slotKey: "maskId", type: "MASK" },
+  { key: "mask2", label: "Maschera", icon: "🎭", iconUrl: "inventory_tab_mask_2.png", slotKey: "maskId2", type: "MASK", second: true },
+  { key: "back", label: "Dietro", icon: "🎒", iconUrl: "inventory_tab_avatar_background.png", slotKey: "backId", type: "BACK" },
+  { key: "back2", label: "Dietro", icon: "🎒", iconUrl: "inventory_tab_avatar_background_2.png", slotKey: "backId2", type: "BACK", second: true },
+  { key: "front", label: "Davanti", icon: "🎁", iconUrl: "inventory_tab_avatar_foreground.png", slotKey: "frontId", type: "FRONT" },
+  { key: "front2", label: "Davanti", icon: "🎁", iconUrl: "inventory_tab_avatar_foreground_2.png", slotKey: "frontId2", type: "FRONT", second: true },
+  { key: "badge", label: "Badge", icon: "🏅", iconUrl: "inventory_tab_badge.png", slotKey: "badgeId", type: "BADGE" },
+  { key: "badge2", label: "Badge", icon: "🏅", iconUrl: "inventory_tab_badge.png", slotKey: "badgeId2", type: "BADGE", second: true },
+  { key: "paint", label: "Body Paint", icon: "🖌️", iconUrl: "inventory_tab_body_paints.png", slotKey: "bodyPaintId", isBodyPaint: true },
 ];
 
 export default function WolvesvillePage() {
@@ -544,7 +546,13 @@ export default function WolvesvillePage() {
                               : "border-stone-800 bg-stone-900/60 text-stone-400 hover:border-stone-600"
                           }`}
                         >
-                          <span className="text-lg leading-none">{cat.icon}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/wov-icons/${cat.iconUrl}`}
+                            alt={cat.label}
+                            draggable={false}
+                            className="h-5 w-8 object-contain"
+                          />
                           <span className="mt-1 whitespace-nowrap text-[10px]">{cat.label}</span>
                           {cat.second && (
                             <span className="absolute -right-1.5 -top-1.5 rounded-full bg-violet-600 px-1 text-[8px] font-bold text-white">

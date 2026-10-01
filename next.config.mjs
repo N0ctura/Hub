@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === 'production';
 
-console.log('Current NODE_ENV:', process.env.NODE_ENV);
-console.log('Is Production?', isProd);
+// The repository is named "Hub", so GitHub Pages serves the site at
+// https://n0ctura.github.io/Hub/. In dev mode (`npm run dev`) the app
+// runs at "/" locally, so no basePath there.
+const basePath = isProd ? '/Hub' : '';
 
 const nextConfig = {
   output: 'export',
-  // In dev mode (isProd=false), we want no basePath so it runs at root /
-  // In prod mode (isProd=true), we use the repo name
-  basePath: isProd ? '/hunger-games-simulator' : '',
-  assetPrefix: isProd ? '/hunger-games-simulator/' : '',
+  basePath,
   images: {
     unoptimized: true,
   },

@@ -23,6 +23,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ItemPickerDialog } from "@/components/wolvesville/item-picker-dialog";
 import {
+  AVATAR_BOX_RATIO,
+  buildAvatarLayers,
+  itemLayerUrl,
+  layerWidthPercent,
+  type WovLayerSpec,
+} from "@/lib/wov-avatar";
+import {
   RARITY_META,
   RARITY_ORDER,
   REQUIRED_SLOT_KEYS,
@@ -78,7 +85,6 @@ export default function WolvesvillePage() {
   const [shared, setShared] = useState<WovSharedAvatar | null>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [showLayers, setShowLayers] = useState(false);
 
   /* ------------------------------- catalogo ------------------------------ */
   const [catalogType, setCatalogType] = useState<WovItemType>("SHIRT");
@@ -388,21 +394,7 @@ export default function WolvesvillePage() {
                     </CardContent>
                   </Card>
 
-                  <Button
-                    variant={showLayers ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setShowLayers((v) => !v)}
-                    className={
-                      showLayers
-                        ? "w-full bg-violet-600 hover:bg-violet-500"
-                        : "w-full border-stone-700 text-stone-400"
-                    }
-                  >
-                    <Layers size={14} className="mr-1" />
-                    Anteprima a livelli {showLayers ? "ON" : "OFF"}
-                  </Button>
-
-                  {showLayers && <LayeredPreview slots={slots} itemMap={itemMap} />}
+                  <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
 
                   {/* Salva skin */}
                   <div className="flex gap-2">
@@ -656,50 +648,86 @@ export default function WolvesvillePage() {
   );
 }
 
-/* ------------------------ anteprima a livelli ----------------------------- */
+/* ------------- anteprima con il motore ufficiale del gioco ---------------- */
 
-function LayeredPreview({
+function WovLayer({ spec, gravestone }: { spec: WovLayerSpec; gravestone?: boolean }) {
+  const [widthPct, setWidthPct] = useState<number | null>(null);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={spec.url}
+      alt=""
+      draggable={false}
+      onLoad={(e) => setWidthPct(layerWidthPercent(e.currentTarget.naturalWidth, gravestone))}
+      style={{
+        position: "absolute",
+        bottom: 0,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: widthPct !== null ? `${widthPct}%` : "8%",
+        height: "auto",
+        zIndex: spec.z,
+        opacity: widthPct !== null ? 1 : 0,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+function GameAvatarPreview({
   slots,
   itemMap,
+  bodyPaints,
 }: {
   slots: WovAvatarSlots;
   itemMap: ItemMap;
+  bodyPaints: WovBodyPaint[];
 }) {
-  const layers = WOV_SLOTS.filter((s) => slots[s.key]).sort(
-    (a, b) => a.layer - b.layer,
+  const layers = useMemo(
+    () =>
+      buildAvatarLayers(
+        slots,
+        (id) => (id ? itemMap[id]?.imageUrl : undefined),
+        (id) => (id ? bodyPaints.find((b) => b.id === id)?.imageUrl : undefined),
+      ),
+    [slots, itemMap, bodyPaints],
   );
+  const grave = slots.gravestoneId ? itemMap[slots.gravestoneId] : null;
 
   return (
-    <Card className="border-stone-700/50 bg-stone-900">
+    <Card className="border-violet-500/30 bg-stone-900">
       <CardContent className="p-4">
-        <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-stone-400">
-          Anteprima a livelli
+        <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-widest text-violet-300">
+          Anteprima live · motore del gioco
         </h3>
-        <div className="relative mx-auto flex h-[280px] w-[220px] items-center justify-center rounded-lg border border-stone-800 bg-stone-950">
-          {layers.length === 0 ? (
-            <p className="text-center text-xs text-stone-600">
-              Nessun oggetto selezionato
-            </p>
-          ) : (
-            layers.map((slot) => {
-              const item = itemMap[slots[slot.key] as string];
-              if (!item) return null;
-              return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={slot.key}
-                  src={item.imageUrl}
-                  alt={item.title ?? item.id}
-                  className="absolute max-h-full max-w-full object-contain"
-                  style={{ zIndex: slot.layer }}
-                />
-              );
-            })
+        <div className="flex items-end justify-center gap-4">
+          <div
+            className="relative w-[210px] rounded-lg border border-stone-800 bg-stone-950/70"
+            style={{ aspectRatio: AVATAR_BOX_RATIO }}
+          >
+            {layers.length === 0 ? (
+              <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-stone-600">
+                Equipaggia un oggetto per vedere l&apos;umano
+              </p>
+            ) : (
+              layers.map((l) => <WovLayer key={l.key} spec={l} />)
+            )}
+          </div>
+          {grave && (
+            <div
+              className="relative w-[96px] rounded-lg border border-stone-800 bg-stone-950/70"
+              style={{ aspectRatio: "372 / 500" }}
+            >
+              <WovLayer
+                spec={{ key: "grave", url: itemLayerUrl(grave.imageUrl), z: 1 }}
+                gravestone
+              />
+            </div>
           )}
         </div>
         <p className="mt-2 text-center text-[10px] text-stone-600">
-          Anteprima sperimentale: il render ufficiale (qui accanto) è quello
-          identico al gioco.
+          Posizionamento identico al gioco: ancorato al fondo, centrato,
+          scala 186 (ricostruito dal client ufficiale).
         </p>
       </CardContent>
     </Card>

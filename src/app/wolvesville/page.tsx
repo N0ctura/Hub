@@ -602,7 +602,7 @@ export default function WolvesvillePage() {
                             src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/wov-icons/${cat.iconUrl}`}
                             alt={cat.label}
                             draggable={false}
-                            className="h-5 w-8 object-contain"
+                            className="h-6 w-10 object-contain"
                           />
                           <span className="mt-1 whitespace-nowrap text-[10px]">{cat.label}</span>
                           {cat.second && (
@@ -649,10 +649,10 @@ export default function WolvesvillePage() {
                   </div>
 
                   </div>
-                  <div className="wov-scroll min-h-0 flex-1 lg:overflow-y-auto">
+                  <div className="wov-scroll min-h-0 flex-1 p-2 lg:overflow-y-auto">
                   <div
-                    className="grid gap-2"
-                    style={{ gridTemplateColumns: colMode === "auto" ? "repeat(auto-fill, minmax(76px, 1fr))" : `repeat(${colMode}, minmax(0, 1fr))` }}
+                    className="grid gap-1"
+                    style={{ gridTemplateColumns: colMode === "auto" ? "repeat(auto-fill, minmax(64px, 1fr))" : `repeat(${colMode}, minmax(0, 1fr))` }}
                   >
                     {!activeCategory.isBodyPaint && (
                       <button

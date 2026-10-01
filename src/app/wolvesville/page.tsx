@@ -158,6 +158,15 @@ export default function WolvesvillePage() {
       setItems(itemList);
       setBodyPaints(bodyPaintList);
       setTags(tagMap);
+      // Il body paint è obbligatorio (senza, l'umano non esiste):
+      // se nessuno è selezionato, applichiamo il default (skin-1).
+      setSlots((prev) => {
+        if (prev.bodyPaintId) return prev;
+        const def =
+          bodyPaintList.find((b) => b.imageUrl.includes("skin-1")) ??
+          bodyPaintList[0];
+        return def ? { ...prev, bodyPaintId: def.id } : prev;
+      });
     } catch (err) {
       setDataError(err instanceof Error ? err.message : "Errore sconosciuto");
     } finally {
@@ -514,17 +523,19 @@ export default function WolvesvillePage() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
-                    <button
-                      type="button"
-                      onClick={() => clearSlot(activeCategory.slotKey)}
-                      className={`flex aspect-square items-center justify-center rounded-lg border-2 text-xs transition-colors ${
-                        !slots[activeCategory.slotKey]
-                          ? "border-green-500 bg-stone-900 text-stone-300"
-                          : "border-stone-800 bg-stone-900/60 text-stone-500 hover:border-stone-600"
-                      }`}
-                    >
-                      None
-                    </button>
+                    {!activeCategory.isBodyPaint && (
+                      <button
+                        type="button"
+                        onClick={() => clearSlot(activeCategory.slotKey)}
+                        className={`flex aspect-square items-center justify-center rounded-lg border-2 text-xs transition-colors ${
+                          !slots[activeCategory.slotKey]
+                            ? "border-green-500 bg-stone-900 text-stone-300"
+                            : "border-stone-800 bg-stone-900/60 text-stone-500 hover:border-stone-600"
+                        }`}
+                      >
+                        None
+                      </button>
+                    )}
                     {visibleItems.map((item) => {
                       const selected = slots[activeCategory.slotKey] === item.id;
                       const meta = RARITY_META[item.rarity];
@@ -578,10 +589,12 @@ export default function WolvesvillePage() {
                   )}
 
                   <p className="mt-3 text-[10px] leading-relaxed text-stone-600">
-                    * Maglia, Occhi, Lapide e Body Paint sono richiesti dal
-                    gioco per generare la skin. I &quot;2° layer&quot; sono
-                    disponibili in-game solo per i membri Moonlight. Clicca di
-                    nuovo un oggetto equipaggiato per rimuoverlo.
+                    * Maglia, Occhi e Lapide sono richiesti dal gioco per
+                    generare la skin. Il body paint è sempre presente (viene
+                    selezionato automaticamente: senza, l&apos;umano non
+                    esiste). I &quot;2° layer&quot; sono disponibili in-game
+                    solo per i membri Moonlight. Clicca di nuovo un oggetto
+                    equipaggiato per rimuoverlo.
                   </p>
                 </div>
               </div>

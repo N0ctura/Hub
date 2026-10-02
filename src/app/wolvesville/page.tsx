@@ -1,990 +1,424 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Download,
-  Layers,
-  Loader2,
-  Moon,
-  RefreshCw,
-  Save,
-  Search,
-  Settings,
-  PawPrint,
-  Trash2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
-import {
-  AVATAR_BOX_RATIO,
-  buildAvatarLayers,
-  layerWidthPercent,
-  storeIconUrl,
-  type WovLayerSpec,
-} from "@/lib/wov-avatar";
-import {
-  RARITY_META,
-  RARITY_ORDER,
-  TYPE_LABELS,
-  WOV_SLOTS,
-  createSharedAvatar,
-  eventLabel,
-  fetchAvatarItems,
-  fetchBodyPaints,
-  fetchItemTags,
-  getApiKey,
-  loadSavedSkins,
-  persistSavedSkins,
-  type SavedSkin,
-  type WovAvatarItem,
-  type WovAvatarSlots,
-  type WovBodyPaint,
-  type WovItemType,
-} from "@/lib/wov-api";
+import { Download, Eye, EyeOff, Home, ImagePlus, Plus, Settings, Share2, Shuffle, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 
-type ItemMap = Record<string, WovAvatarItem>;
-
-const TYPE_ORDER: WovItemType[] = [
-  "SHIRT",
-  "HAIR",
-  "HAT",
-  "GLASSES",
-  "EYES",
-  "MOUTH",
-  "MASK",
-  "BADGE",
-  "FRONT",
-  "BACK",
-  "LEGS",
-];
-
-interface CreatorCategory {
+interface Category {
   key: string;
-  label: string;
   icon: string;
-  iconUrl: string;
-  slotKey: string;
-  type?: WovItemType;
-  isBodyPaint?: boolean;
   second?: boolean;
 }
 
-/* Categorie nell'ordine del gioco, con i doppioni Moonlight.
-   Le icone sono quelle ufficiali dell'inventario di Wolvesville. */
-const CREATOR_CATEGORIES: CreatorCategory[] = [
-  { key: "hat", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats.png", slotKey: "hatId", type: "HAT" },
-  { key: "hat2", label: "Cappello", icon: "🎩", iconUrl: "inventory_tab_hats_2.png", slotKey: "hatId2", type: "HAT", second: true },
-  { key: "hair", label: "Capelli", icon: "💇", iconUrl: "inventory_tab_hair.png", slotKey: "hairId", type: "HAIR" },
-  { key: "hair2", label: "Capelli", icon: "💇", iconUrl: "inventory_tab_hair.png", slotKey: "hairId2", type: "HAIR", second: true },
-  { key: "eyes", label: "Occhi", icon: "👁️", iconUrl: "inventory_tab_eyes.png", slotKey: "eyesId", type: "EYES" },
-  { key: "eyes2", label: "Occhi", icon: "👁️", iconUrl: "inventory_tab_eyes.png", slotKey: "eyesId2", type: "EYES", second: true },
-  { key: "glasses", label: "Occhiali", icon: "👓", iconUrl: "inventory_tab_glasses.png", slotKey: "glassesId", type: "GLASSES" },
-  { key: "glasses2", label: "Occhiali", icon: "👓", iconUrl: "inventory_tab_glasses_2.png", slotKey: "glassesId2", type: "GLASSES", second: true },
-  { key: "shirt", label: "Maglia", icon: "👕", iconUrl: "inventory_tab_clothes.png", slotKey: "shirtId", type: "SHIRT" },
-  { key: "shirt2", label: "Maglia", icon: "👕", iconUrl: "inventory_tab_clothes.png", slotKey: "shirtId2", type: "SHIRT", second: true },
-  { key: "mouth", label: "Bocca", icon: "👄", iconUrl: "inventory_tab_mouth.png", slotKey: "mouthId", type: "MOUTH" },
-  { key: "mouth2", label: "Bocca", icon: "👄", iconUrl: "inventory_tab_mouth.png", slotKey: "mouthId2", type: "MOUTH", second: true },
-  { key: "mask", label: "Maschera", icon: "🎭", iconUrl: "inventory_tab_mask.png", slotKey: "maskId", type: "MASK" },
-  { key: "mask2", label: "Maschera", icon: "🎭", iconUrl: "inventory_tab_mask_2.png", slotKey: "maskId2", type: "MASK", second: true },
-  { key: "back", label: "Dietro", icon: "🎒", iconUrl: "inventory_tab_avatar_background.png", slotKey: "backId", type: "BACK" },
-  { key: "back2", label: "Dietro", icon: "🎒", iconUrl: "inventory_tab_avatar_background_2.png", slotKey: "backId2", type: "BACK", second: true },
-  { key: "front", label: "Davanti", icon: "🎁", iconUrl: "inventory_tab_avatar_foreground.png", slotKey: "frontId", type: "FRONT" },
-  { key: "front2", label: "Davanti", icon: "🎁", iconUrl: "inventory_tab_avatar_foreground_2.png", slotKey: "frontId2", type: "FRONT", second: true },
-  { key: "badge", label: "Badge", icon: "🏅", iconUrl: "inventory_tab_badge.png", slotKey: "badgeId", type: "BADGE" },
-  { key: "badge2", label: "Badge", icon: "🏅", iconUrl: "inventory_tab_badge.png", slotKey: "badgeId2", type: "BADGE", second: true },
-  { key: "paint", label: "Body Paint", icon: "🖌️", iconUrl: "inventory_tab_body_paints.png", slotKey: "bodyPaintId", isBodyPaint: true },
+/* Ordine e icone come nella barra dell'inventario ufficiale. */
+const CATEGORIES: Category[] = [
+  { key: "gravestone", icon: "inventory_tab_gravestones.png" },
+  { key: "hat", icon: "inventory_tab_hats.png" },
+  { key: "hat2", icon: "inventory_tab_hats_2.png", second: true },
+  { key: "hair", icon: "inventory_tab_hair.png" },
+  { key: "glasses", icon: "inventory_tab_glasses.png" },
+  { key: "glasses2", icon: "inventory_tab_glasses_2.png", second: true },
+  { key: "clothes", icon: "inventory_tab_clothes.png" },
+  { key: "eyes", icon: "inventory_tab_eyes.png" },
+  { key: "mouth", icon: "inventory_tab_mouth.png" },
+  { key: "mask", icon: "inventory_tab_mask.png" },
+  { key: "mask2", icon: "inventory_tab_mask_2.png", second: true },
+  { key: "back", icon: "inventory_tab_avatar_background.png" },
+  { key: "back2", icon: "inventory_tab_avatar_background_2.png", second: true },
+  { key: "front", icon: "inventory_tab_avatar_foreground.png" },
+  { key: "front2", icon: "inventory_tab_avatar_foreground_2.png", second: true },
+  { key: "legs", icon: "inventory_tab_legs.png" },
+  { key: "paint", icon: "inventory_tab_body_paints.png" },
+  { key: "badge", icon: "inventory_tab_badge.png" },
 ];
 
-export default function WolvesvillePage() {
-  /* ------------------------------ stato base ----------------------------- */
-  // Chiave API iniettata a build time dal secret GitHub WOLVESVILLE_API_KEY.
-  const apiKey = getApiKey();
+const PLACEHOLDER_TILES = 44;
 
-  const [items, setItems] = useState<WovAvatarItem[]>([]);
-  const [bodyPaints, setBodyPaints] = useState<WovBodyPaint[]>([]);
-  const [tags, setTags] = useState<Record<string, string[]>>({});
-  const [loadingData, setLoadingData] = useState(false);
-  const [dataError, setDataError] = useState<string | null>(null);
+function usePersisted<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(initial);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw !== null) setValue(JSON.parse(raw) as T);
+    } catch {
+      /* ignore */
+    }
+  }, [key]);
+  const update = (v: T) => {
+    setValue(v);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(v));
+    } catch {
+      /* ignore */
+    }
+  };
+  return [value, update] as const;
+}
 
-  /* ------------------------------- creator ------------------------------- */
-  const [slots, setSlots] = useState<WovAvatarSlots>({});
+function WolvesvillePage() {
+  const [tab, setTab] = useState<"avatar" | "items">("avatar");
+  const [cat, setCat] = useState("hat");
+  const [hideUi, setHideUi] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [moonlight, setMoonlight] = useState(true);
-  const [exporting, setExporting] = useState<0 | 1 | 2 | 3>(0);
+  const [moonlight, setMoonlight] = usePersisted("wov_moonlight_v2", true);
+  const [avatars, setAvatars] = usePersisted<number[]>("wov_avatars", [0]);
+  const [activeAvatar, setActiveAvatar] = usePersisted("wov_active_avatar", 0);
+  const [backgrounds, setBackgrounds] = usePersisted<Record<string, string>>("wov_backgrounds", {});
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
-  /* ------------------------------- catalogo ------------------------------ */
-  const [catalogType, setCatalogType] = useState<WovItemType>("SHIRT");
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [catalogRarity, setCatalogRarity] = useState<string | null>(null);
+  const visibleCats = CATEGORIES.filter((c) => moonlight || !c.second);
+  const activeBg = backgrounds[String(activeAvatar)];
 
-  /* --------------------------- skin salvate ------------------------------ */
-  const [savedSkins, setSavedSkins] = useState<SavedSkin[]>([]);
-  const [skinName, setSkinName] = useState("");
-
-  /* -------------------------- editor stile gioco ------------------------- */
-  const [creatorCat, setCreatorCat] = useState("hat");
-  const [creatorSearch, setCreatorSearch] = useState("");
-  const [visibleCount, setVisibleCount] = useState(300);
-  const [activeTab, setActiveTab] = useState("creator");
-  const [sortMode, setSortMode] = useState<"name" | "rarity-desc" | "rarity-asc">("name");
-  const [colMode, setColMode] = useState(5);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const saved = Number(window.localStorage.getItem("wov_columns"));
-    if (saved >= 3 && saved <= 12) setColMode(saved);
-  }, []);
-
-  const changeColMode = (v: string) => {
-    const next = Math.min(12, Math.max(3, Number(v) || 5));
-    setColMode(next);
-    try {
-      window.localStorage.setItem("wov_columns", String(next));
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const itemMap = useMemo<ItemMap>(() => {
-    const map: ItemMap = {};
-    for (const item of items) map[item.id] = item;
-    for (const bp of bodyPaints) {
-      map[bp.id] = { ...(bp as unknown as WovAvatarItem), type: "SHIRT" };
-    }
-    return map;
-  }, [items, bodyPaints]);
-
-  /* ---------------------------- caricamento ------------------------------ */
-
-  const loadAll = useCallback(async (force = false) => {
-    setLoadingData(true);
-    setDataError(null);
-    try {
-      const [itemList, bodyPaintList, tagMap] = await Promise.all([
-        fetchAvatarItems(force),
-        fetchBodyPaints(force),
-        fetchItemTags(force),
-      ]);
-      setItems(itemList);
-      setBodyPaints(bodyPaintList);
-      setTags(tagMap);
-      // Il body paint è obbligatorio (senza, l'umano non esiste):
-      // se nessuno è selezionato, applichiamo il default (skin-1).
-      setSlots((prev) => {
-        if (prev.bodyPaintId) return prev;
-        const def =
-          bodyPaintList.find((b) => b.imageUrl.includes("skin-1")) ??
-          bodyPaintList[0];
-        return def ? { ...prev, bodyPaintId: def.id } : prev;
-      });
-    } catch (err) {
-      setDataError(err instanceof Error ? err.message : "Errore sconosciuto");
-    } finally {
-      setLoadingData(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setSavedSkins(loadSavedSkins());
-    setMoonlight(window.localStorage.getItem("wov_moonlight") !== "off");
-    if (apiKey) void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadAll]);
-
-  /* ---------------------------- impostazioni ------------------------------ */
-
-  const toggleMoonlight = (on: boolean) => {
-    setMoonlight(on);
-    try {
-      window.localStorage.setItem("wov_moonlight", on ? "on" : "off");
-    } catch {
-      /* ignore */
-    }
-    if (!on) {
-      // svuota tutti gli slot doppi (2° layer)
-      setSlots((prev) => {
-        const next: WovAvatarSlots = { ...prev };
-        for (const k of Object.keys(next)) {
-          if (k.endsWith("2")) next[k] = null;
-        }
-        return next;
-      });
-    }
-  };
-
-  /* ------------------------------ azioni --------------------------------- */
-
-  const equipItem = (item: WovAvatarItem) => {
-    const slotDef = WOV_SLOTS.find((s) => s.type === item.type);
-    const key = slotDef?.key;
-    if (!key) return;
-    setSlots((prev) => ({ ...prev, [key]: item.id }));
-  };
-
-  const clearSlot = (slotKey: string) => {
-    setSlots((prev) => ({ ...prev, [slotKey]: null }));
-  };
-
-  /* ------------------------- download della skin -------------------------- */
-
-  // Il CDN di Wolvesville non manda header CORS: per comporre la skin nel
-  // canvas (e poterla scaricare, anche su iPhone) le immagini per l'export
-  // passano da un proxy che espone CORS. In caso di errore usiamo il render
-  // ufficiale dell'API come ultima spiaggia.
-  const loadExportImage = (url: string): Promise<HTMLImageElement> =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = () => {
-        const proxied = new Image();
-        proxied.crossOrigin = "anonymous";
-        proxied.onload = () => resolve(proxied);
-        proxied.onerror = () => reject(new Error("Immagine non caricabile"));
-        proxied.src = `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=png`;
-      };
-      img.src = url;
-    });
-
-  const downloadSkin = async (scale: 1 | 2 | 3) => {
-    setExporting(scale);
-    try {
-      const layers = buildAvatarLayers(
-        slots,
-        (id) => (id ? itemMap[id]?.imageUrl : undefined),
-        (id) => (id ? bodyPaints.find((b) => b.id === id)?.imageUrl : undefined),
-        scale === 3 ? 3 : 2,
-      );
-      if (layers.length === 0) throw new Error("Nessun oggetto equipaggiato");
-      const canvas = document.createElement("canvas");
-      canvas.width = 372 * scale;
-      canvas.height = 900 * scale;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas non disponibile");
-      const density = scale === 3 ? 3 : 2;
-      for (const layer of layers) {
-        const img = await loadExportImage(layer.url);
-        const drawnW = (img.naturalWidth / density) * scale;
-        const drawnH = drawnW * (img.naturalHeight / img.naturalWidth);
-        ctx.drawImage(
-          img,
-          (canvas.width - drawnW) / 2,
-          canvas.height - drawnH,
-          drawnW,
-          drawnH,
-        );
-      }
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png"),
-      );
-      if (!blob) throw new Error("Export non riuscito");
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${skinName.trim() || "wov-skin"}-${scale}x.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch {
-      // Fallback: render ufficiale dell'API (server-side, zero problemi CORS)
-      try {
-        const shared = await createSharedAvatar(slots);
-        window.open(shared.avatar.url.replace(".png", "@3x.png"), "_blank");
-      } catch {
-        alert("Download non riuscito: equipaggia almeno un oggetto e riprova.");
-      }
-    } finally {
-      setExporting(0);
-    }
-  };
-
-  const saveSkin = () => {
-    const name = skinName.trim() || `Skin ${savedSkins.length + 1}`;
-    const skin: SavedSkin = {
-      name,
-      slots: { ...slots },
-      savedAt: Date.now(),
+  const pickBackground = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBackgrounds({ ...backgrounds, [String(activeAvatar)]: String(reader.result) });
+      toast.success("Sfondo aggiornato");
     };
-    const next = [skin, ...savedSkins].slice(0, 30);
-    setSavedSkins(next);
-    persistSavedSkins(next);
-    setSkinName("");
+    reader.readAsDataURL(file);
   };
 
-  const deleteSkin = (index: number) => {
-    const next = savedSkins.filter((_, i) => i !== index);
-    setSavedSkins(next);
-    persistSavedSkins(next);
-  };
-
-  /* --------------------- griglia categoria (stile gioco) ------------------ */
-
-  const activeCategory =
-    CREATOR_CATEGORIES.find((c) => c.key === creatorCat) ?? CREATOR_CATEGORIES[1];
-
-  const categoryItems = useMemo(() => {
-    const q = creatorSearch.trim().toLowerCase();
-    let base: (WovAvatarItem | WovBodyPaint)[] = activeCategory.isBodyPaint
-      ? bodyPaints
-      : items.filter((i) => i.type === activeCategory.type);
-    if (q) {
-      base = base.filter(
-        (i) =>
-          (i.title ?? "").toLowerCase().includes(q) ||
-          i.id.toLowerCase().includes(q),
-      );
-    }
-    const rank: Record<string, number> = { MYTHICAL: 0, LEGENDARY: 1, EPIC: 2, RARE: 3, COMMON: 4 };
-    const nameOf = (i: WovAvatarItem | WovBodyPaint) => (i.title ?? i.id).toLowerCase();
-    if (sortMode === "rarity-desc") {
-      return [...base].sort(
-        (a, b) => rank[a.rarity] - rank[b.rarity] || nameOf(a).localeCompare(nameOf(b)),
-      );
-    }
-    if (sortMode === "rarity-asc") {
-      return [...base].sort(
-        (a, b) => rank[b.rarity] - rank[a.rarity] || nameOf(a).localeCompare(nameOf(b)),
-      );
-    }
-    return [...base].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-  }, [activeCategory, items, bodyPaints, creatorSearch, sortMode]);
-
-  const visibleItems = categoryItems.slice(0, visibleCount);
-
-  // Infinite scroll: appena la fine della griglia si avvicina, carichiamo altri item
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((v) => (v < categoryItems.length ? v + 300 : v));
-        }
-      },
-      { rootMargin: "800px" },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [categoryItems.length]);
-
-  const toggleEquip = (cat: CreatorCategory, id: string) => {
-    setSlots((prev) => ({
-      ...prev,
-      [cat.slotKey]: prev[cat.slotKey] === id ? null : id,
-    }));
-  };
-
-  /* ------------------------------ filtri --------------------------------- */
-
-  const catalogItems = useMemo(() => {
-    const q = catalogSearch.trim().toLowerCase();
-    return items
-      .filter((item) => item.type === catalogType)
-      .filter((item) => (catalogRarity ? item.rarity === catalogRarity : true))
-      .filter((item) => {
-        if (!q) return true;
-        const inTags = (tags[item.id] ?? []).some((tag) =>
-          tag.toLowerCase().includes(q),
-        );
-        return (
-          (item.title ?? "").toLowerCase().includes(q) ||
-          item.id.toLowerCase().includes(q) ||
-          inTags
-        );
+  const downloadPng = async (scale: 1 | 2 | 3) => {
+    const node = previewRef.current;
+    if (!node) return;
+    const w = 380 * scale;
+    const h = 343 * scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const svg = node.querySelector("svg");
+    const img = node.querySelector("img[data-bg]");
+    const load = (src: string) =>
+      new Promise<HTMLImageElement>((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = src;
       });
-  }, [items, catalogType, catalogSearch, catalogRarity, tags]);
+    try {
+      let source: string;
+      if (img) {
+        source = (img as HTMLImageElement).src;
+      } else if (svg) {
+        source = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+      } else {
+        return;
+      }
+      const image = await load(source);
+      ctx.drawImage(image, 0, 0, w, h);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `wov-avatar-${scale}x.png`;
+      a.click();
+      toast.success(`Immagine ${scale}x scaricata`);
+    } catch {
+      toast.error("Download non riuscito");
+    }
+  };
 
-  /* ------------------------------ render UI ------------------------------ */
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copiato");
+    } catch {
+      toast.error("Impossibile copiare il link");
+    }
+  };
 
   return (
-    <div
-      className={`flex min-h-screen flex-col bg-[#272a2a] font-serif text-stone-100 ${
-        activeTab === "creator" ? "lg:h-screen lg:overflow-hidden" : ""
-      }`}
-    >
-      {/* Navbar */}
-      <nav className="border-b border-[#2c2c30] bg-[#222525]/95 px-4 py-2 backdrop-blur-md">
-        <div className="flex w-full items-center justify-between px-3">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-[#ff4081] transition-colors hover:text-[#ff5c9d]"
-          >
-            <ArrowLeft size={20} />
-            <span>Torna all&apos;Hub</span>
-          </Link>
-          <div className="flex items-center gap-2 text-xl font-bold tracking-widest text-[#ff4081]">
-            <PawPrint size={24} />
-            <span>WOV STUDIO</span>
+    <div className="min-h-screen bg-[var(--wov-page)] font-sans text-[var(--wov-text)]">
+      <div className="mx-auto flex max-w-[1240px] flex-col gap-3 p-2 sm:p-4 lg:h-screen lg:flex-row lg:gap-3">
+        {/* ------------------------- colonna sinistra ------------------------- */}
+        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-[380px]">
+          {/* Anteprima */}
+          <div ref={previewRef} className="relative aspect-[380/343] w-full overflow-hidden rounded-md bg-[var(--wov-sky)]">
+            {activeBg ? (
+              <img data-bg src={activeBg} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <NightScene />
+            )}
+            {!hideUi && (
+              <div className="absolute left-0 top-0 z-20 flex items-center gap-1 rounded-br-md bg-[var(--wov-toolbar)] px-2 py-1.5">
+                <ToolbarButton label="Torna all'Hub" asLink />
+                <ToolbarButton label="Nascondi" onClick={() => setHideUi(true)}>
+                  <Eye size={22} />
+                </ToolbarButton>
+                <ToolbarButton label="Condividi" onClick={share}>
+                  <Share2 size={20} />
+                </ToolbarButton>
+                <ToolbarButton label="Impostazioni" onClick={() => setSettingsOpen((v) => !v)}>
+                  <Settings size={22} />
+                </ToolbarButton>
+              </div>
+            )}
+            {hideUi && (
+              <button
+                aria-label="Mostra"
+                onClick={() => setHideUi(false)}
+                className="absolute left-2 top-2 z-20 rounded-md bg-[var(--wov-toolbar)]/80 p-1.5 text-[var(--wov-text)]"
+              >
+                <EyeOff size={18} />
+              </button>
+            )}
+
+            {settingsOpen && !hideUi && (
+              <div className="absolute left-2 top-12 z-30 w-[240px] rounded-md border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-3 shadow-xl">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider">Impostazioni</span>
+                  <button aria-label="Chiudi" onClick={() => setSettingsOpen(false)} className="text-[var(--wov-muted)]">
+                    <X size={16} />
+                  </button>
+                </div>
+                <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                  <span>Moonlight (2° layer)</span>
+                  <input
+                    type="checkbox"
+                    checked={moonlight}
+                    onChange={(e) => setMoonlight(e.target.checked)}
+                    className="h-4 w-4 accent-[var(--wov-accent)]"
+                  />
+                </label>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSettingsOpen(true)}
-              className="text-stone-400 hover:text-[#ff5c9d]"
+
+          {/* Download + sfondo */}
+          <div className="rounded-md bg-[var(--wov-panel)] p-2">
+            <div className="flex items-center justify-center gap-2">
+              {([1, 2, 3] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => void downloadPng(s)}
+                  className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125"
+                >
+                  <Download size={14} />
+                  {s}x
+                </button>
+              ))}
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125"
+                aria-label="Carica sfondo"
+              >
+                <ImagePlus size={14} />
+                Sfondo
+              </button>
+              {activeBg && (
+                <button
+                  onClick={() => {
+                    const next = { ...backgrounds };
+                    delete next[String(activeAvatar)];
+                    setBackgrounds(next);
+                  }}
+                  className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-accent)] hover:brightness-125"
+                  aria-label="Rimuovi sfondo"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 text-center text-[10px] text-[var(--wov-muted)]">
+              1x piccola · 2x nitida · 3x qualità massima (@3x). PNG dello sfondo dell'avatar.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickBackground(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          {/* Avatars */}
+          <div className="relative flex min-h-[200px] flex-col rounded-md bg-[var(--wov-panel)] lg:flex-1 lg:min-h-0">
+            <p className="pt-2 text-center text-xs font-bold">Avatars</p>
+            <button
+              aria-label="Avatar casuale"
+              className="absolute right-0 top-0 rounded-bl-md bg-[var(--wov-toolbar)] p-1.5"
+              onClick={() => setActiveAvatar(avatars[Math.floor(Math.random() * avatars.length)] ?? 0)}
             >
-              <Settings size={16} />
-              <span className="ml-1.5 hidden text-xs sm:inline">Impostazioni</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void loadAll(true)}
-              disabled={!apiKey || loadingData}
-              className="text-stone-400 hover:text-[#ff5c9d]"
-            >
-              <RefreshCw size={14} />
-            </Button>
+              <Shuffle size={14} />
+            </button>
+            <div className="wov-scroll grid flex-1 grid-cols-3 content-start gap-x-6 gap-y-3 overflow-y-auto px-6 py-3 lg:px-8">
+              {avatars.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveAvatar(id)}
+                  className={`relative aspect-square overflow-hidden rounded-lg border-2 bg-[var(--wov-sky)] ${
+                    activeAvatar === id ? "border-[var(--wov-selected)]" : "border-[var(--wov-tile-border)]"
+                  }`}
+                >
+                  {backgrounds[String(id)] ? (
+                    <img src={backgrounds[String(id)]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : (
+                    <NightScene mini />
+                  )}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  const next = Math.max(...avatars, -1) + 1;
+                  setAvatars([...avatars, next]);
+                  setActiveAvatar(next);
+                }}
+                className="flex aspect-square flex-col items-center justify-center rounded-lg bg-[var(--wov-tile)] text-[var(--wov-muted)]"
+                aria-label="Nuovo avatar"
+              >
+                <Plus size={30} />
+              </button>
+            </div>
           </div>
         </div>
-      </nav>
 
-      <main className="w-full min-h-0 flex-1 px-2 pb-2 lg:overflow-hidden lg:overflow-hidden">
-        <header className="pb-2 pt-5 text-center lg:py-1">
-          <h1 className="font-serif text-3xl font-black uppercase tracking-widest text-[#ff4081] drop-shadow-[0_0_15px_rgba(255,64,129,0.4)] lg:text-2xl">
-            Wolvesville Studio
-          </h1>
-          <p className="hidden text-sm italic text-stone-400 sm:block lg:hidden">
-            Catalogo completo degli oggetti e creatore di skin, con il motore
-            grafico ufficiale del gioco.
-          </p>
-        </header>
+        {/* -------------------------- pannello destro ------------------------- */}
+        <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-[var(--wov-panel)] lg:min-h-0">
+          <div className="grid grid-cols-2">
+            {(["avatar", "items"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`py-2.5 text-[11px] font-bold uppercase tracking-wide ${
+                  tab === t ? "text-[var(--wov-text)]" : "text-[var(--wov-muted)]"
+                }`}
+              >
+                {t === "avatar" ? "Avatar" : "Items"}
+              </button>
+            ))}
+          </div>
 
-        {/* Setup API key */}
-        {!apiKey ? (
-          <Card className="mx-auto mb-8 max-w-2xl border-[#2f3233] bg-[#36393a]">
-            <CardContent className="p-6 text-center">
-              <Moon className="mx-auto mb-4 text-[#ff4081]" size={40} />
-              <h2 className="mb-2 text-xl font-bold text-stone-100">
-                API key non configurata
-              </h2>
-              <p className="mx-auto mb-4 max-w-md text-sm text-stone-400">
-                Il sito usa la Wolvesville Public API con la chiave del
-                proprietario, iniettata automaticamente alla build dai GitHub
-                Secrets.
-              </p>
-              <ol className="mx-auto max-w-md space-y-1 text-left text-sm text-stone-400">
-                <li>1. Apri il repository GitHub → <b>Settings</b></li>
-                <li>2. <b>Secrets and variables</b> → Actions → <b>New repository secret</b></li>
-                <li>
-                  3. Nome: <code className="text-stone-100">WOLVESVILLE_API_KEY</code>,
-                  valore: la tua API key
-                </li>
-                <li>4. Fai ripartire il deploy (push o re-run dell&apos;action)</li>
-              </ol>
-              <p className="mt-3 text-xs text-stone-500">
-                Per provare in locale: crea un file .env.local con
-                NEXT_PUBLIC_WOV_API_KEY=la-tua-chiave e rifai la build.
-              </p>
-            </CardContent>
-          </Card>
-        ) : dataError ? (
-          <Card className="mx-auto mb-8 max-w-2xl border-red-500/40 bg-[#36393a]">
-            <CardContent className="p-6 text-center">
-              <p className="mb-4 text-sm text-red-400">{dataError}</p>
-              <div className="flex justify-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => void loadAll(true)}
-                  className="border-[#4b4e50] text-stone-300"
-                >
-                  <RefreshCw size={14} className="mr-1" /> Riprova
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Tabs defaultValue="creator" onValueChange={setActiveTab} className="flex h-full min-h-0 flex-col">
-            <TabsList className="mx-auto mb-2 flex shrink-0 bg-[#36393a]">
-              <TabsTrigger value="creator" className="data-[state=active]:text-[#ff4081]">
-                <Layers size={14} className="mr-1" /> Crea Skin
-              </TabsTrigger>
-              <TabsTrigger value="catalog" className="data-[state=active]:text-[#ff4081]">
-                <Search size={14} className="mr-1" /> Catalogo
-              </TabsTrigger>
-              {savedSkins.length > 0 && (
-                <TabsTrigger value="saved" className="data-[state=active]:text-[#ff4081]">
-                  <Save size={14} className="mr-1" /> Salvate ({savedSkins.length})
-                </TabsTrigger>
-              )}
-            </TabsList>
-
-            {/* ------------------------- CREA SKIN ------------------------- */}
-            <TabsContent value="creator" className="min-h-0 flex-1 lg:h-full">
-              <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(260px,29%)_minmax(0,1fr)]">
-                {/* Preview */}
-                <div className="wov-scroll flex flex-col gap-3 lg:h-full lg:min-h-0 lg:overflow-y-auto">
-                  <GameAvatarPreview slots={slots} itemMap={itemMap} bodyPaints={bodyPaints} />
-
-                  <Card className="shrink-0 border-[#2f3233] bg-[#36393a]">
-                    <CardContent className="p-3">
-                      <h3 className="mb-2 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
-                        Scarica la skin
-                      </h3>
-                      <div className="flex items-center justify-center gap-2">
-                        {([1, 2, 3] as const).map((q) => (
-                          <Button
-                            key={q}
-                            size="sm"
-                            disabled={exporting !== 0}
-                            onClick={() => void downloadSkin(q)}
-                            className="bg-[#ff4081] hover:bg-[#ff5c92]"
-                          >
-                            {exporting === q ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Download size={14} className="mr-1" />
-                            )}
-                            {q}x
-                          </Button>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-center text-[10px] text-stone-500">
-                        1x piccola · 2x nitida · 3x qualità massima (@3x). PNG
-                        con sfondo trasparente, compatibile anche con iPhone.
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Salva skin */}
-                  <div className="flex shrink-0 gap-2">
-                    <Input
-                      value={skinName}
-                      onChange={(e) => setSkinName(e.target.value)}
-                      placeholder="Nome della skin..."
-                      className="border-[#4b4e50] bg-[#36393a] text-stone-200 placeholder:text-stone-600"
-                    />
-                    <Button
-                      onClick={saveSkin}
-                      size="sm"
-                      className="bg-[#ff4081] hover:bg-[#ff5c92]"
-                    >
-                      <Save size={14} />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Editor stile Wolvesville */}
-                <div className="flex flex-col lg:h-full lg:min-h-0">
-                  <div className="shrink-0">
-                  <div className="wov-scroll mb-2 flex gap-1.5 overflow-x-auto pb-2">
-                    {CREATOR_CATEGORIES.filter((c) => moonlight || !c.second).map((cat) => {
-                      const activeCat = creatorCat === cat.key;
-                      const filled = !!slots[cat.slotKey];
-                      return (
-                        <button
-                          key={cat.key}
-                          type="button"
-                          onClick={() => {
-                            setCreatorCat(cat.key);
-                            setCreatorSearch("");
-                            setVisibleCount(150);
-                          }}
-                          className={`relative flex shrink-0 flex-col items-center rounded-lg border px-2.5 py-1.5 transition-colors ${
-                            activeCat
-                              ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
-                              : "border-[#2f3233] bg-[#36393a] text-stone-400 hover:border-[#575a5c]"
-                          }`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/wov-icons/${cat.iconUrl}`}
-                            alt={cat.label}
-                            draggable={false}
-                            className="h-6 w-10 object-contain"
-                          />
-                          <span className="mt-1 whitespace-nowrap text-[10px]">{cat.label}</span>
-                          {cat.second && (
-                            <span className="absolute -right-1.5 -top-1.5 rounded-full bg-[#ff4081] px-1 text-[8px] font-bold text-white">
-                              2°
-                            </span>
-                          )}
-                          {filled && !activeCat && (
-                            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-green-500" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="relative mb-3 flex gap-2">
-                    <div className="relative flex-1">
-                      <Search
-                        size={14}
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500"
-                      />
-                      <Input
-                        value={creatorSearch}
-                        onChange={(e) => {
-                          setCreatorSearch(e.target.value);
-                          setVisibleCount(300);
-                        }}
-                        placeholder={`Cerca in ${activeCategory.label}...`}
-                        className="border-[#4b4e50] bg-[#36393a] pl-8 text-stone-200 placeholder:text-stone-600"
-                      />
-                    </div>
-                    <select
-                      value={sortMode}
-                      onChange={(e) => {
-                        setSortMode(e.target.value as "name" | "rarity-desc" | "rarity-asc");
-                        setVisibleCount(300);
-                      }}
-                      className="shrink-0 rounded-lg border border-[#4b4e50] bg-[#36393a] px-2 text-xs text-stone-200"
-                    >
-                      <option value="name">Ordina: nome</option>
-                      <option value="rarity-desc">Prima: leggendari</option>
-                      <option value="rarity-asc">Prima: comuni</option>
-                    </select>
-                  </div>
-
-                  </div>
-                  <div className="wov-scroll min-h-0 flex-1 p-2 lg:overflow-y-auto">
-                  <div
-                    className="grid gap-1"
-                    style={{ gridTemplateColumns: `repeat(${colMode}, minmax(0, 1fr))` }}
-                  >
-                    {!activeCategory.isBodyPaint && (
-                      <button
-                        type="button"
-                        onClick={() => clearSlot(activeCategory.slotKey)}
-                        className={`flex aspect-[126/101] items-center justify-center rounded-lg border-2 text-xs transition-colors ${
-                          !slots[activeCategory.slotKey]
-                            ? "border-green-500 bg-[#484848] text-stone-100"
-                            : "border-[#4b4e50] bg-[#484848] text-stone-400 hover:border-[#6b6e70]"
-                        }`}
-                      >
-                        None
-                      </button>
-                    )}
-                    {visibleItems.map((item) => {
-                      const selected = slots[activeCategory.slotKey] === item.id;
-                      const meta = RARITY_META[item.rarity];
-                      const cost = item.costInGold
-                        ? `🪙${item.costInGold}`
-                        : item.costInRoses
-                          ? `🌹${item.costInRoses}`
-                          : item.costInGems
-                            ? `💎${item.costInGems}`
-                            : null;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => toggleEquip(activeCategory, item.id)}
-                          className={`relative flex aspect-[126/101] items-center justify-center rounded-lg border-2 bg-[#484848] p-2 transition-all ${
-                            selected
-                              ? "border-green-500 ring-2 ring-green-500/40"
-                              : `${meta.border} hover:border-[#6b6e70]`
-                          }`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={storeIconUrl(item.imageUrl)}
-                            alt={item.id}
-                            loading="lazy"
-                            draggable={false}
-                            className="h-full w-full object-contain"
-                          />
-                          {cost && (
-                            <span className="absolute bottom-0.5 right-1 rounded bg-[#222525]/95 px-1 text-[9px] text-yellow-300">
-                              {cost}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                    <div ref={sentinelRef} className="h-10" />
-
-                  <p className="mt-3 text-[10px] leading-relaxed text-stone-600">
-                    Il body paint è sempre presente (viene selezionato
-                    automaticamente: senza, l&apos;umano non esiste). I
-                    &quot;2° layer&quot; sono disponibili in-game solo per i
-                    membri Moonlight. Clicca di nuovo un oggetto equipaggiato
-                    per rimuoverlo.
-                  </p>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* -------------------------- CATALOGO -------------------------- */}
-            <TabsContent value="catalog">
-              <div className="mb-4 flex flex-wrap justify-center gap-1.5">
-                {TYPE_ORDER.map((type) => (
+          {tab === "avatar" ? (
+            <>
+              <div className="wov-scroll flex shrink-0 items-center justify-between gap-1 overflow-x-auto bg-[var(--wov-panel-2)] px-2 py-1">
+                {visibleCats.map((c) => (
                   <button
-                    key={type}
-                    type="button"
-                    onClick={() => setCatalogType(type)}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                      catalogType === type
-                        ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
-                        : "border-[#4b4e50] text-stone-400 hover:border-[#636668]"
-                    }`}
+                    key={c.key}
+                    onClick={() => setCat(c.key)}
+                    aria-label={c.key}
+                    className="flex h-8 min-w-8 flex-1 items-center justify-center"
                   >
-                    {TYPE_LABELS[type]}
+                    <img
+                      src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/wov-icons/${c.icon}`}
+                      alt=""
+                      className={`h-5 w-auto max-w-7 object-contain transition ${
+                        cat === c.key ? "opacity-100 brightness-150" : "opacity-40"
+                      }`}
+                    />
                   </button>
                 ))}
               </div>
-
-              <div className="mb-3 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
-                <div className="relative w-full sm:w-72">
-                  <Search
-                    size={14}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500"
-                  />
-                  <Input
-                    value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
-                    placeholder="Cerca per nome, ID o colore..."
-                    className="border-[#4b4e50] bg-[#36393a] pl-8 text-stone-200 placeholder:text-stone-600"
-                  />
-                </div>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCatalogRarity(null)}
-                    className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                      catalogRarity === null
-                        ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
-                        : "border-[#4b4e50] text-stone-400"
-                    }`}
-                  >
-                    Tutte le rarità
-                  </button>
-                  {RARITY_ORDER.map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() =>
-                        setCatalogRarity(catalogRarity === r ? null : r)
-                      }
-                      className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${
-                        catalogRarity === r
-                          ? "border-[#ff4081] bg-[#ff4081]/15 text-stone-100"
-                          : "border-[#4b4e50] text-stone-400 hover:border-[#636668]"
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${RARITY_META[r].dot}`} />
-                      {RARITY_META[r].label}
-                    </button>
+              <div className="wov-scroll flex-1 overflow-y-auto p-1">
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9">
+                  <Tile>
+                    <span className="text-sm text-[var(--wov-muted)]">None</span>
+                  </Tile>
+                  {Array.from({ length: PLACEHOLDER_TILES }).map((_, i) => (
+                    <Tile key={i} />
                   ))}
                 </div>
               </div>
-
-              <p className="mb-3 text-center text-xs text-stone-500">
-                {loadingData
-                  ? "Caricamento catalogo..."
-                  : `${catalogItems.length} oggetti in ${TYPE_LABELS[catalogType].toLowerCase()}`}
-              </p>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                {catalogItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={`group border bg-[#36393a] p-2 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(255,64,129,0.15)] ${RARITY_META[item.rarity].border}`}
-                  >
-                    <CardContent className="flex flex-col items-center p-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={storeIconUrl(item.imageUrl)}
-                        alt={item.title ?? item.id}
-                        className="h-16 w-full object-contain"
-                        loading="lazy"
-                      />
-                      <p className="mt-1 line-clamp-2 min-h-[2em] text-center text-[11px] text-stone-300">
-                        {item.title ?? item.id}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
-                        <span
-                          className={`flex items-center gap-1 text-[9px] uppercase ${RARITY_META[item.rarity].text}`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full ${RARITY_META[item.rarity].dot}`} />
-                          {RARITY_META[item.rarity].label}
-                        </span>
-                        {eventLabel(item.event) && (
-                          <span className="text-[9px] text-stone-500">
-                            · {eventLabel(item.event)}
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => equipItem(item)}
-                        className="mt-2 h-6 w-full bg-[#ff4081] px-1 text-[10px] hover:bg-[#ff5c92]"
-                      >
-                        Usa nella skin
-                      </Button>
-                    </CardContent>
-                  </Card>
+            </>
+          ) : (
+            <div className="wov-scroll flex-1 overflow-y-auto p-1">
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9">
+                {Array.from({ length: 27 }).map((_, i) => (
+                  <Tile key={i} />
                 ))}
               </div>
-            </TabsContent>
-
-            {/* -------------------------- SALVATE --------------------------- */}
-            <TabsContent value="saved">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {savedSkins.map((skin, index) => (
-                  <Card key={skin.savedAt} className="border-[#2f3233] bg-[#36393a]">
-                    <CardContent className="flex items-center gap-3 p-3">
-                      <p className="flex-1 truncate text-sm text-stone-200">{skin.name}</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSlots({ ...skin.slots });
-                        }}
-                        className="border-[#ff4081]/60 text-stone-100 hover:bg-[#ff5c92]/10"
-                      >
-                        Carica
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => deleteSkin(index)}
-                        className="px-2 text-stone-500 hover:text-red-400"
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-          </Tabs>
-        )}
-      </main>
-
-      {/* Impostazioni */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="border-[#2f3233] bg-[#2a2d2d] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-stone-100">Impostazioni</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#2f3233] bg-[#36393a] p-3">
-            <div>
-              <p className="text-sm text-stone-200">Colonne della griglia</p>
-              <p className="mt-0.5 text-xs text-stone-500">Più colonne = più item per riga</p>
             </div>
-            <select
-              value={String(colMode)}
-              onChange={(e) => changeColMode(e.target.value)}
-              className="rounded-lg border border-[#4b4e50] bg-[#2a2d2d] px-2 py-1 text-sm text-stone-200"
-            >
-              {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
-                <option key={n} value={n}>
-                  {n} colonne
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-[#2f3233] bg-[#36393a] p-3">
-            <div>
-              <p className="text-sm text-stone-200">Effetto Moonlight</p>
-              <p className="mt-0.5 text-xs text-stone-500">
-                Mostra le categorie con doppio layer (2°). Disattivandolo, gli
-                slot 2° vengono svuotati.
-              </p>
-            </div>
-            <Switch checked={moonlight} onCheckedChange={toggleMoonlight} />
-          </div>
-          <p className="text-[10px] text-stone-600">
-            Altre impostazioni in arrivo (sfondi, versione mobile...).
-          </p>
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ------------- anteprima con il motore ufficiale del gioco ---------------- */
-
-function WovLayer({ spec }: { spec: WovLayerSpec }) {
-  const [widthPct, setWidthPct] = useState<number | null>(null);
+function Tile({ children }: { children?: React.ReactNode }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={spec.url}
-      alt=""
-      draggable={false}
-      onLoad={(e) => setWidthPct(layerWidthPercent(e.currentTarget.naturalWidth))}
-      style={{
-        position: "absolute",
-        bottom: 0,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: widthPct !== null ? `${widthPct}%` : "8%",
-        height: "auto",
-        zIndex: spec.z,
-        opacity: widthPct !== null ? 1 : 0,
-        pointerEvents: "none",
-      }}
-    />
+    <div className="flex aspect-[86/68] items-center justify-center rounded-lg border-2 border-[var(--wov-tile-border)] bg-[var(--wov-tile)]">
+      {children}
+    </div>
   );
 }
 
-function GameAvatarPreview({
-  slots,
-  itemMap,
-  bodyPaints,
+function ToolbarButton({
+  label,
+  onClick,
+  children,
+  asLink,
 }: {
-  slots: WovAvatarSlots;
-  itemMap: ItemMap;
-  bodyPaints: WovBodyPaint[];
+  label: string;
+  onClick?: () => void;
+  children?: React.ReactNode;
+  asLink?: boolean;
 }) {
-  const layers = useMemo(
-    () =>
-      buildAvatarLayers(
-        slots,
-        (id) => (id ? itemMap[id]?.imageUrl : undefined),
-        (id) => (id ? bodyPaints.find((b) => b.id === id)?.imageUrl : undefined),
-      ),
-    [slots, itemMap, bodyPaints],
-  );
+  const cls = "flex h-9 w-9 items-center justify-center text-[var(--wov-text)] hover:opacity-80";
+  if (asLink) {
+    return (
+      <Link href="/" aria-label={label} title={label} className={cls}>
+        <Home size={20} />
+      </Link>
+    );
+  }
   return (
-    <Card className="flex min-h-[200px] flex-1 flex-col border-[#2f3233] bg-[#36393a]">
-      <CardContent className="flex min-h-0 flex-1 flex-col p-3">
-        <h3 className="mb-2 shrink-0 text-center text-sm font-bold uppercase tracking-widest text-stone-100">
-          Anteprima live · motore del gioco
-        </h3>
-        <div className="flex min-h-0 flex-1 items-end justify-center">
-          <div
-            className="relative h-full overflow-hidden rounded-lg border border-[#2f3233] bg-[#1e2123]"
-            style={{ aspectRatio: AVATAR_BOX_RATIO }}
-          >
-            {layers.length === 0 ? (
-              <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-stone-600">
-                Equipaggia un oggetto per vedere l&apos;umano
-              </p>
-            ) : (
-              <div
-                className="absolute bottom-0 left-1/2 h-full -translate-x-1/2"
-                style={{ width: "76%" }}
-              >
-                {layers.map((l) => (
-                  <WovLayer key={l.key} spec={l} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <p className="mt-2 shrink-0 text-center text-[10px] text-stone-500">
-          Posizionamento identico al gioco: ancorato al fondo, centrato,
-          scala 186 (ricostruito dal client ufficiale).
-        </p>
-      </CardContent>
-    </Card>
+    <button aria-label={label} title={label} onClick={onClick} className={cls}>
+      {children}
+    </button>
   );
 }
+
+/* Paesaggio notturno con alberi, scogliera e villaggio. */
+function NightScene({ mini }: { mini?: boolean }) {
+  return (
+    <svg viewBox="0 0 380 343" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full">
+      <rect width="380" height="343" fill="var(--wov-sky)" />
+      {!mini &&
+        [
+          [140, 12], [210, 30], [300, 18], [350, 60], [260, 70], [120, 50],
+        ].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1" fill="#cfd8e6" opacity="0.7" />)}
+      {/* alberi */}
+      <g fill="#14161f">
+        {[10, 32, 55, 78].map((x, i) => (
+          <polygon key={i} points={`${x},${120 - i * 6} ${x - 16},${175} ${x + 16},${175}`} />
+        ))}
+      </g>
+      {/* scogliera */}
+      <path d="M0 150 L120 140 L160 155 L200 150 L240 180 L240 343 L0 343 Z" fill="#191b26" />
+      {/* villaggio */}
+      <g fill="#14161f">
+        <rect x="280" y="230" width="22" height="80" />
+        <polygon points="280,230 291,205 302,230" />
+        <rect x="300" y="250" width="30" height="60" />
+        <polygon points="300,250 315,232 330,250" />
+        <rect x="330" y="215" width="18" height="100" />
+        <polygon points="330,215 339,192 348,215" />
+        <rect x="348" y="245" width="32" height="70" />
+        <polygon points="348,245 364,228 380,245" />
+        <rect x="255" y="270" width="28" height="50" />
+        <polygon points="255,270 269,255 283,270" />
+      </g>
+      <g fill="#dfe6f2">
+        {[
+          [286, 245], [294, 262], [306, 262], [318, 275], [336, 230], [336, 250], [342, 270], [355, 262], [368, 262], [362, 285], [262, 285], [272, 295],
+        ].map(([x, y], i) => (
+          <rect key={i} x={x} y={y} width="4" height="6" />
+        ))}
+      </g>
+      <g fill="#14161f">
+        {[230, 250, 372].map((x, i) => (
+          <polygon key={i} points={`${x},${260 - i * 4} ${x - 14},${320} ${x + 14},${320}`} />
+        ))}
+      </g>
+      <rect y="315" width="380" height="28" fill="#14161f" />
+    </svg>
+  );
+}
+
+export default WolvesvillePage;

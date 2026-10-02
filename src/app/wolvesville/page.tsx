@@ -58,6 +58,8 @@ const CATEGORIES: Category[] = [
   { key: "glasses2", icon: "inventory_tab_glasses_2.png", slotKey: "glassesId2", type: "GLASSES", second: true },
   { key: "clothes", icon: "inventory_tab_clothes.png", slotKey: "shirtId", type: "SHIRT" },
   { key: "clothes2", icon: "inventory_tab_clothes.png", slotKey: "shirtId2", type: "SHIRT", second: true },
+  { key: "legs", icon: "inventory_tab_legs.png", slotKey: "legsId", type: "LEGS" },
+  { key: "legs2", icon: "inventory_tab_legs.png", slotKey: "legsId2", type: "LEGS", second: true },
   { key: "eyes", icon: "inventory_tab_eyes.png", slotKey: "eyesId", type: "EYES" },
   { key: "eyes2", icon: "inventory_tab_eyes.png", slotKey: "eyesId2", type: "EYES", second: true },
   { key: "mouth", icon: "inventory_tab_mouth.png", slotKey: "mouthId", type: "MOUTH" },
@@ -68,7 +70,6 @@ const CATEGORIES: Category[] = [
   { key: "back2", icon: "inventory_tab_avatar_background_2.png", slotKey: "backId2", type: "BACK", second: true },
   { key: "front", icon: "inventory_tab_avatar_foreground.png", slotKey: "frontId", type: "FRONT" },
   { key: "front2", icon: "inventory_tab_avatar_foreground_2.png", slotKey: "frontId2", type: "FRONT", second: true },
-  { key: "legs", icon: "inventory_tab_legs.png", slotKey: "legsId", type: "LEGS" },
   { key: "badge", icon: "inventory_tab_badge.png", slotKey: "badgeId", type: "BADGE" },
   { key: "paint", icon: "inventory_tab_body_paints.png", slotKey: "bodyPaintId", isBodyPaint: true },
 ];

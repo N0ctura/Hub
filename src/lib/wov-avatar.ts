@@ -95,8 +95,10 @@ export function buildAvatarLayers(
   push("back", itemLayerUrlIf(getItemStoreUrl(slots.backId), density), 1);
   push("back2", itemLayerUrlIf(getItemStoreUrl(slots.backId2), density), 2);
   if (bpUrls) push("body", bpUrls.body, 3);
-  push("shirt", itemLayerUrlIf(getItemStoreUrl(slots.shirtId), density), 4);
-  push("shirt2", itemLayerUrlIf(getItemStoreUrl(slots.shirtId2), density), 5);
+  push("legs", itemLayerUrlIf(getItemStoreUrl(slots.legsId), density), 4);
+  push("legs2", itemLayerUrlIf(getItemStoreUrl(slots.legsId2), density), 5);
+  push("shirt", itemLayerUrlIf(getItemStoreUrl(slots.shirtId), density), 6);
+  push("shirt2", itemLayerUrlIf(getItemStoreUrl(slots.shirtId2), density), 7);
   push("badge", itemLayerUrlIf(getItemStoreUrl(slots.badgeId), density), 6);
   push("badge2", itemLayerUrlIf(getItemStoreUrl(slots.badgeId2), density), 7);
   if (bpUrls) push("head", bpUrls.head, 8);

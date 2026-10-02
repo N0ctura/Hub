@@ -14,6 +14,13 @@ import type { WovAvatarSlots } from "./wov-api";
 /** Rapporto del box di anteprima (larghezza/altezza in unità @2x). */
 export const AVATAR_BOX_RATIO = "372 / 430";
 
+/**
+ * Larghezza base del box avatar in % del riquadro di anteprima.
+ * Modificando AVATAR_BOX_BASE_WIDTH_SKIN_EDITOR cambi il valore
+ * "100%" della scala dell'editor skin.
+ */
+export const AVATAR_BOX_BASE_WIDTH_PCT = 76;
+
 /** Fattore di scala della lapide (renderer dedicato nel gioco: ×1.3). */
 export const GRAVESTONE_SCALE = 1.3;
 

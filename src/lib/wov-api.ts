@@ -194,6 +194,99 @@ export async function fetchBackgrounds(force = false): Promise<WovBackground[]> 
   return data;
 }
 
+export interface WovSkinPack {
+  id: string;
+  title: string;
+  rarity: WovRarity;
+  previewImageUrl?: string;
+  source: "SET" | "COLLECTION" | "ROLE_CARD";
+  slots: WovAvatarSlots;
+}
+
+function normalizeSetSlots(raw: Record<string, unknown>): WovAvatarSlots {
+  const out: WovAvatarSlots = {};
+  for (const def of WOV_SLOTS) {
+    const flat = raw[def.key];
+    if (typeof flat === "string") {
+      out[def.key] = flat || null;
+      continue;
+    }
+    const nested = raw[def.type.toLowerCase() as string] as
+      | { id?: string }
+      | undefined;
+    if (nested && typeof nested.id === "string") out[def.key] = nested.id;
+  }
+  return out;
+}
+
+export async function fetchSkinPacks(force = false): Promise<WovSkinPack[]> {
+  if (!force) {
+    const cached = readCache<WovSkinPack[]>("skinPacks");
+    if (cached) return cached;
+  }
+  const [sets, collections, roleCards] = await Promise.all([
+    wovFetch<Record<string, unknown>[]>("/items/avatarItemSets").catch(
+      () => [] as Record<string, unknown>[],
+    ),
+    wovFetch<Record<string, unknown>[]>("/items/avatarItemCollections").catch(
+      () => [] as Record<string, unknown>[],
+    ),
+    wovFetch<Record<string, unknown>[]>("/items/advancedRoleCardOffers").catch(
+      () => [] as Record<string, unknown>[],
+    ),
+  ]);
+
+  const out: WovSkinPack[] = [];
+
+  for (const s of sets) {
+    const id = String(s.id ?? s.setId ?? "");
+    if (!id) continue;
+    out.push({
+      id,
+      title: String(s.title ?? s.name ?? id),
+      rarity: (s.rarity as WovRarity) ?? "COMMON",
+      previewImageUrl: s.previewImageUrl
+        ? String(s.previewImageUrl)
+        : undefined,
+      source: "SET",
+      slots: normalizeSetSlots(s),
+    });
+  }
+
+  for (const c of collections) {
+    const id = String(c.id ?? c.collectionId ?? "");
+    if (!id) continue;
+    out.push({
+      id,
+      title: String(c.title ?? c.name ?? id),
+      rarity: (c.rarity as WovRarity) ?? "COMMON",
+      previewImageUrl: c.previewImageUrl
+        ? String(c.previewImageUrl)
+        : undefined,
+      source: "COLLECTION",
+      slots: normalizeSetSlots(c),
+    });
+  }
+
+  for (const rc of roleCards) {
+    const id = String(rc.id ?? rc.offerId ?? "");
+    if (!id) continue;
+    out.push({
+      id,
+      title: String(rc.title ?? rc.name ?? id),
+      rarity: (rc.rarity as WovRarity) ?? "LEGENDARY",
+      previewImageUrl: rc.previewImageUrl
+        ? String(rc.previewImageUrl)
+        : undefined,
+      source: "ROLE_CARD",
+      slots: normalizeSetSlots(rc),
+    });
+  }
+
+  writeCache("skinPacks", out);
+  return out;
+}
+
 /**
  * Chiede all'API di renderizzare la skin con il motore grafico ufficiale
  * del gioco: restituisce URL dell'immagine + id condivisibile.

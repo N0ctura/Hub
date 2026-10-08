@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Play, SkipForward, RotateCcw, Trophy, Sun, Moon, Utensils, Copy, Skull, ArrowRight, FastForward, Eye } from "lucide-react";
 import { useAppearance } from "@/context/appearance-context";
+import { withBase } from "@/lib/base-path";
+import { playSound } from "@/lib/sounds";
 
 // Helper for color opacity
 const hexToRgba = (hex: string, alpha: number) => {
@@ -20,6 +22,7 @@ const hexToRgba = (hex: string, alpha: number) => {
 interface SimulationEngineProps {
   tributes: Tribute[];
   events: GameEvent[];
+  objects: string[];
   config: GameConfig;
   onTributesChange: (tributes: Tribute[]) => void;
   onWinner: (winner: Tribute | null, logs: SimulationLog[]) => void;
@@ -28,6 +31,7 @@ interface SimulationEngineProps {
 export function SimulationEngine({
   tributes,
   events,
+  objects,
   config,
   onTributesChange,
   onWinner,
@@ -37,7 +41,7 @@ export function SimulationEngine({
   const [gameState, setGameState] = useState<GameState>({
     tributes,
     events,
-    objects: DEFAULT_OBJECTS,
+    objects: objects.length > 0 ? objects : DEFAULT_OBJECTS,
     isRunning: false,
     currentPhase: "setup",
     currentPhaseNumber: 0,
@@ -46,6 +50,11 @@ export function SimulationEngine({
     pendingEvents: [],
     currentStep: 0,
   });
+
+  // Effetti sonori: rispettano interruttore e volume della scheda Config
+  const soundOn = config.soundEnabled ?? true;
+  const soundVolume = config.soundVolume ?? 0.5;
+  const sfx = (name: Parameters<typeof playSound>[0]) => playSound(name, soundOn, soundVolume);
 
   const eventListRef = useRef<HTMLDivElement>(null);
   const autoPlayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,37 +78,49 @@ export function SimulationEngine({
   };
 
   const getWeightedEvent = (
-    pool: GameEvent[], 
-    phaseNumber: number, 
-    deathRateConfig: number = 0.5
+    pool: GameEvent[],
+    phaseNumber: number,
+    deathRateConfig: number = 0.5,
+    aliveCount: number = 24,
+    usedThisPhase: Set<string> = new Set(),
+    recentIds: Set<string> = new Set()
   ): GameEvent | null => {
     if (pool.length === 0) return null;
 
-    // Dynamic Death Rate: Scale fatal event weights based on day
-    // Day 1: 0.5x chance (relative to base)
-    // Increases by 0.25 per day, capped at 2.5x
-    const dayFactor = Math.min(0.5 + (phaseNumber - 1) * 0.25, 2.5);
-    
-    // Config death rate slider (assumed 0-1, default 0.5)
-    // 0.5 -> 1x, 1.0 -> 2x, 0.1 -> 0.2x
-    const configFactor = (deathRateConfig || 0.5) * 2;
+    // Non ripetere la stessa frase nello stesso round, se ci sono alternative
+    const fresh = pool.filter((e) => !usedThisPhase.has(e.id));
+    const candidates = fresh.length > 0 ? fresh : pool;
 
-    const weightedPool = pool.map(event => {
+    // Mortalita' dinamica: i giorni iniziali sono piu' tranquilli (0.5x),
+    // poi cresce di 0.25 al giorno fino a 2.5x.
+    const dayFactor = Math.min(0.5 + (phaseNumber - 1) * 0.25, 2.5);
+
+    // Slider mortalita' (0-1, default 0.5): 0.5 -> 1x, 1.0 -> 2x, 0 -> nessun evento fatale
+    const configFactor = deathRateConfig * 2;
+
+    // Con pochi tributi rimasti le morti diventano piu' probabili,
+    // cosi' la fine della partita non si trascina (8 vivi: 1.35x, 4 vivi: 2.75x)
+    const lateFactor = aliveCount <= 8 ? 1 + (9 - aliveCount) * 0.35 : 1;
+
+    const weightedPool = candidates.map((event) => {
       let weight = event.weight || 5;
+      // Frasi usate negli ultimi round: meno probabili
+      if (recentIds.has(event.id)) weight *= 0.25;
       if (event.isFatal) {
-        weight *= dayFactor * configFactor;
+        weight *= dayFactor * configFactor * lateFactor;
       }
       return { event, weight };
     });
 
     const totalWeight = weightedPool.reduce((sum, item) => sum + item.weight, 0);
+    if (totalWeight <= 0) return candidates[Math.floor(Math.random() * candidates.length)];
     let random = Math.random() * totalWeight;
 
     for (const item of weightedPool) {
       if (random < item.weight) return item.event;
       random -= item.weight;
     }
-    
+
     return weightedPool[weightedPool.length - 1].event;
   };
 
@@ -144,7 +165,8 @@ export function SimulationEngine({
       participants = [...participants, ...validCandidates.slice(0, maxPlaceholder - 1)];
     }
 
-    const obj = DEFAULT_OBJECTS[Math.floor(Math.random() * DEFAULT_OBJECTS.length)];
+    const objectPool = objects.length > 0 ? objects : DEFAULT_OBJECTS;
+    const obj = objectPool[Math.floor(Math.random() * objectPool.length)];
 
     let text = event.text;
     for (let p = 1; p <= maxPlaceholder; p++) {
@@ -152,6 +174,8 @@ export function SimulationEngine({
       text = text.replace(regex, participants[p - 1].name);
     }
     text = text.replace(/{O}/g, obj);
+    // "a" davanti a una parola che inizia per "a" diventa "ad" ("a ambrogio" -> "ad ambrogio")
+    text = text.replace(/\b([Aa]) (?=[Aa])/g, "$1d ");
 
     const deaths: string[] = [];
     const participantIds = participants.map((t) => t.id);
@@ -241,6 +265,13 @@ export function SimulationEngine({
       const shuffledAlive = shuffleArray(alive);
       const simulatedEvents: SimulatedEvent[] = [];
       const processedIds = new Set<string>();
+      const usedThisPhase = new Set<string>();
+      const recentIds = new Set<string>(
+        gameState.logs
+          .slice(-2)
+          .flatMap((log) => log.events.map((e) => e.originalEventId))
+          .filter((id): id is string => Boolean(id))
+      );
       
       let i = 0;
       while (i < shuffledAlive.length) {
@@ -270,8 +301,11 @@ export function SimulationEngine({
         while (!result && attempts < MAX_ATTEMPTS) {
           const randomEvent = getWeightedEvent(
             phaseEvents, 
-            gameState.currentPhaseNumber || 1, 
-            config.deathRate
+            gameState.currentPhaseNumber || 1,
+            config.deathRate,
+            alive.length,
+            usedThisPhase,
+            recentIds
           );
           
           if (randomEvent) {
@@ -286,6 +320,7 @@ export function SimulationEngine({
         }
 
         if (result) {
+          if (result.originalEventId) usedThisPhase.add(result.originalEventId);
           simulatedEvents.push(result);
           result.participants.forEach(pid => processedIds.add(pid));
         } else {
@@ -305,7 +340,7 @@ export function SimulationEngine({
         isRunning: true,
       }));
     },
-    [tributes, events, onWinner, gameState.logs, config.deathRate, gameState.currentPhaseNumber]
+    [tributes, events, objects, onWinner, gameState.logs, config.deathRate, gameState.currentPhaseNumber]
   );
   
   // I'll implement the loop properly inside the replacement string.
@@ -327,6 +362,7 @@ export function SimulationEngine({
       return newT;
     });
 
+    sfx(event.deaths.length > 0 ? "death" : "click");
     onTributesChange(updatedTributes);
     setGameState(prev => ({
       ...prev,
@@ -349,6 +385,10 @@ export function SimulationEngine({
       });
     }
 
+    const anyDeath = gameState.pendingEvents
+      .slice(gameState.currentStep)
+      .some((e) => e.deaths.length > 0);
+    sfx(anyDeath ? "death" : "click");
     onTributesChange(updatedTributes);
     setGameState(prev => ({
       ...prev,
@@ -364,12 +404,12 @@ export function SimulationEngine({
     const newLog: SimulationLog = {
       id: crypto.randomUUID(),
       phase: gameState.currentPhase as "day" | "night" | "feast",
-      phaseNumber: gameState.currentPhaseNumber + (gameState.currentPhase === "day" ? 1 : 0),
+      phaseNumber: gameState.currentPhaseNumber,
       events: gameState.pendingEvents,
       deaths,
     };
 
-    const newPhaseNumber = gameState.currentPhase === "day" ? gameState.currentPhaseNumber + 1 : gameState.currentPhaseNumber;
+    const newPhaseNumber = gameState.currentPhaseNumber;
     const newLogs = [...gameState.logs, newLog];
     
     setGameState(prev => ({
@@ -389,7 +429,7 @@ export function SimulationEngine({
     setGameState({
       tributes: resetTributes,
       events,
-      objects: DEFAULT_OBJECTS,
+      objects: objects.length > 0 ? objects : DEFAULT_OBJECTS,
       isRunning: true,
       currentPhase: "day", // Will be triggered by effect or user
       currentPhaseNumber: 0,
@@ -398,26 +438,33 @@ export function SimulationEngine({
       pendingEvents: [],
       currentStep: 0,
     });
+    sfx("day");
     // Trigger first phase immediately
     setTimeout(() => preparePhase("day"), 0);
+  };
+
+  // Dopo un giorno: banchetto ogni N giorni (config), altrimenti notte.
+  // Dopo una notte o un banchetto: sempre un nuovo giorno.
+  const getNextPhaseType = (): "day" | "night" | "feast" => {
+    const lastPhase = gameState.logs[gameState.logs.length - 1]?.phase;
+    if (lastPhase === "day") {
+      const frequency = Math.max(1, config.feastFrequency);
+      return gameState.currentPhaseNumber % frequency === frequency - 1 ? "feast" : "night";
+    }
+    return "day";
   };
 
   const nextPhase = () => {
     const alive = tributes.filter((t) => t.isAlive);
     if (alive.length <= 1) {
+      sfx("victory");
       setGameState((prev) => ({ ...prev, currentPhase: "finished", winner: alive[0] || null }));
       onWinner(alive[0] || null, gameState.logs);
       return;
     }
 
-    const lastPhase = gameState.logs[gameState.logs.length - 1]?.phase;
-    const nextPhaseType =
-      gameState.currentPhaseNumber % config.feastFrequency === config.feastFrequency - 1
-        ? "feast"
-        : lastPhase === "day"
-          ? "night"
-          : "day";
-    
+    const nextPhaseType = getNextPhaseType();
+    sfx(nextPhaseType);
     preparePhase(nextPhaseType);
   };
 
@@ -428,7 +475,7 @@ export function SimulationEngine({
     setGameState({
       tributes: resetTributes,
       events,
-      objects: DEFAULT_OBJECTS,
+      objects: objects.length > 0 ? objects : DEFAULT_OBJECTS,
       isRunning: false,
       currentPhase: "setup",
       currentPhaseNumber: 0,
@@ -550,7 +597,7 @@ export function SimulationEngine({
           <div 
             className="absolute inset-0 z-0 transition-all duration-1000 ease-in-out"
             style={{
-              backgroundImage: `url(${bgImage})`,
+              backgroundImage: `url("${withBase(bgImage)}")`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}
@@ -583,7 +630,7 @@ export function SimulationEngine({
             <div className={getPhaseBadgeClass()}>
               <PhaseIcon />
               <span className="ml-2">
-                {gameState.currentPhase === "day" && `Giorno ${gameState.currentPhaseNumber + 1}`}
+                {gameState.currentPhase === "day" && `Giorno ${gameState.currentPhaseNumber}`}
                 {gameState.currentPhase === "night" && `Notte ${gameState.currentPhaseNumber}`}
                 {gameState.currentPhase === "feast" && "Banchetto"}
                 {gameState.currentPhase === "summary" && "Riepilogo"}
@@ -622,7 +669,7 @@ export function SimulationEngine({
                       <div key={participantId} className="flex flex-col items-center gap-1 group relative">
                         {tribute.image ? (
                           <img
-                            src={tribute.image}
+                            src={withBase(tribute.image)}
                             alt={tribute.name}
                             className="w-16 h-16 rounded-md border-2 border-primary/50 object-cover shadow-lg transition-transform hover:scale-105"
                             title={tribute.name}
@@ -736,7 +783,7 @@ export function SimulationEngine({
           {gameState.currentPhase === "summary" && (
             <Button onClick={nextPhase} className="btn-gold w-full max-w-md shadow-lg" size="lg">
               <SkipForward size={20} className="mr-2" />
-              {gameState.currentPhaseNumber % config.feastFrequency === config.feastFrequency - 1 ? "Vai al Banchetto" : "Prossima Fase"}
+              {getNextPhaseType() === "feast" ? "Vai al Banchetto" : "Prossima Fase"}
             </Button>
           )}
 

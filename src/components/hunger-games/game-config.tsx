@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Settings, Trash2, Image as ImageIcon, RotateCcw, Upload, X } from "lucide-react";
+import { Settings, Trash2, Image as ImageIcon, RotateCcw, Upload, X, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_CONFIG } from "@/lib/game-types";
 import { useRef } from "react";
+import { withBase } from "@/lib/base-path";
+import { playSound } from "@/lib/sounds";
 
 interface GameConfigPanelProps {
   config: GameConfig;
@@ -90,7 +92,7 @@ export function GameConfigPanel({ config, onConfigChange, onFullReset }: GameCon
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-black/20">
             {currentImage && (
               <img 
-                src={currentImage} 
+                src={withBase(currentImage)} 
                 alt={`${phase} preview`} 
                 className="h-full w-full object-cover"
               />
@@ -152,10 +154,10 @@ export function GameConfigPanel({ config, onConfigChange, onFullReset }: GameCon
 
           <div className="space-y-2">
             <Label className="text-sm">
-              Tasso di Mortalità (Probabilità Eventi Fatali): {Math.round((config.deathRate ?? 0.15) * 100)}%
+              Tasso di Mortalità (Probabilità Eventi Fatali): {Math.round((config.deathRate ?? 0.5) * 100)}%
             </Label>
             <Slider
-              value={[config.deathRate ?? 0.15]}
+              value={[config.deathRate ?? 0.5]}
               onValueChange={([v]) => update({ deathRate: v })}
               min={0}
               max={1}
@@ -193,6 +195,47 @@ export function GameConfigPanel({ config, onConfigChange, onFullReset }: GameCon
               />
             </div>
           )}
+
+          <div className="space-y-4 rounded-lg bg-secondary/30 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Effetti sonori</Label>
+                <p className="text-xs text-muted-foreground">
+                  Click, cannone per le morti, suoni di fase e fanfara finale
+                </p>
+              </div>
+              <Switch
+                checked={config.soundEnabled ?? true}
+                onCheckedChange={(v) => update({ soundEnabled: v })}
+              />
+            </div>
+
+            {(config.soundEnabled ?? true) && (
+              <div className="space-y-2">
+                <Label className="text-sm">
+                  Volume: {Math.round((config.soundVolume ?? 0.5) * 100)}%
+                </Label>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[config.soundVolume ?? 0.5]}
+                    onValueChange={([v]) => update({ soundVolume: v })}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => playSound("death", true, config.soundVolume ?? 0.5)}
+                  >
+                    <Volume2 size={14} className="mr-2" />
+                    Prova
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="pt-4 border-t border-border/30 space-y-4">
              <div className="flex items-center justify-between">

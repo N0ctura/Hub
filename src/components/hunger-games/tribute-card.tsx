@@ -2,6 +2,7 @@
 
 import type { Tribute } from "@/lib/game-types";
 import { Skull, X, User } from "lucide-react";
+import { withBase } from "@/lib/base-path";
 
 interface TributeCardProps {
   tribute: Tribute;
@@ -23,8 +24,6 @@ export function TributeCard({ tribute, size = "md", onRemove, showKills = false 
     lg: 32,
   };
 
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
-
   return (
     <div className="flex flex-col items-center gap-1 animate-fade-in">
       <div className="relative group">
@@ -37,7 +36,7 @@ export function TributeCard({ tribute, size = "md", onRemove, showKills = false 
         >
           {tribute.image ? (
             <img
-              src={tribute.image || `${basePath}/placeholder.svg`}
+              src={withBase(tribute.image)}
               alt={tribute.name}
               className="w-full h-full object-cover"
             />

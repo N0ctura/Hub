@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { Plus, Trash2, Sun, Moon, Utensils, Wand2, Scroll, Info, FileJson, CheckCircle, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Sun, Moon, Utensils, Wand2, Scroll, Info, FileJson, CheckCircle, AlertCircle, Ghost } from "lucide-react";
 import { CopyPromptButton } from "@/components/hunger-games/copy-prompt-button";
+import { HALLOWEEN_PACK } from "@/data/halloween-pack";
 
 interface EventEditorProps {
   events: GameEvent[];
@@ -56,6 +57,22 @@ export function EventEditor({ events, onEventsChange }: EventEditorProps) {
     onEventsChange(defaults);
   };
 
+  const normalize = (t: string) => t.trim().toLowerCase();
+
+  const addHalloweenPack = () => {
+    const existing = new Set(events.map((e) => normalize(e.text)));
+    const toAdd = HALLOWEEN_PACK.filter((e) => !existing.has(normalize(e.text))).map((e) => ({
+      ...e,
+      id: crypto.randomUUID(),
+    }));
+    if (toAdd.length === 0) {
+      showToast("Il pacchetto Halloween è già presente: nessun evento nuovo da aggiungere.", "error");
+      return;
+    }
+    onEventsChange([...events, ...toAdd]);
+    showToast(`Aggiunti ${toAdd.length} eventi Halloween (giorno, notte e banchetto).`, "success");
+  };
+
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
@@ -66,9 +83,16 @@ export function EventEditor({ events, onEventsChange }: EventEditorProps) {
       const parsed = JSON.parse(jsonText);
       const items = Array.isArray(parsed) ? parsed : [parsed];
       const imported: GameEvent[] = [];
+      const existingTexts = new Set(events.map((e) => normalize(e.text)));
+      let skipped = 0;
 
       for (const item of items) {
         if (!item.text || typeof item.text !== "string") continue;
+        if (existingTexts.has(normalize(item.text))) {
+          skipped++;
+          continue;
+        }
+        existingTexts.add(normalize(item.text));
 
         const validTypes = ["day", "night", "feast", "arena"];
         const type = validTypes.includes(item.type) ? item.type : "day";
@@ -94,14 +118,22 @@ export function EventEditor({ events, onEventsChange }: EventEditorProps) {
       }
 
       if (imported.length === 0) {
-        showToast("Nessun evento valido trovato nel JSON.", "error");
+        showToast(
+          skipped > 0
+            ? `Nessun evento nuovo: ${skipped} erano già presenti.`
+            : "Nessun evento valido trovato nel JSON.",
+          "error"
+        );
         return;
       }
 
       onEventsChange([...events, ...imported]);
       setJsonText("");
       setShowJsonImport(false);
-      showToast(`Importati ${imported.length} eventi. Il sistema di tracking delle kill è attivo.`, "success");
+      showToast(
+        `Importati ${imported.length} eventi${skipped > 0 ? ` (${skipped} duplicati saltati)` : ""}. Il sistema di tracking delle kill è attivo.`,
+        "success"
+      );
     } catch {
       showToast("JSON non valido. Controlla la sintassi e riprova.", "error");
     }
@@ -224,6 +256,11 @@ export function EventEditor({ events, onEventsChange }: EventEditorProps) {
           <Button onClick={loadDefaultEvents} variant="outline" className="w-full bg-transparent">
             <Wand2 size={18} className="mr-2" />
             {events.length === 0 ? "Carica Eventi Predefiniti" : "Ricarica/Aggiorna Eventi Default"}
+          </Button>
+
+          <Button onClick={addHalloweenPack} variant="outline" className="w-full bg-transparent">
+            <Ghost size={18} className="mr-2" />
+            Aggiungi pacchetto Halloween ({HALLOWEEN_PACK.length} eventi)
           </Button>
 
           {/* JSON Import */}

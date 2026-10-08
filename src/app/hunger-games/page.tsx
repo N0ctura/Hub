@@ -3,19 +3,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Tribute, GameEvent, GameConfig, SimulationLog } from "@/lib/game-types";
-import { DEFAULT_CONFIG, generateDefaultTributes } from "@/lib/game-types";
+import { DEFAULT_CONFIG, DEFAULT_OBJECTS, generateDefaultTributes } from "@/lib/game-types";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { ParticleBackground } from "@/components/particle-background";
 import { Navbar } from "@/components/navbar";
 import { TributeManager } from "@/components/hunger-games/tribute-manager";
 import { EventEditor } from "@/components/hunger-games/event-editor";
+import { ObjectEditor } from "@/components/hunger-games/object-editor";
 import { GameConfigPanel } from "@/components/hunger-games/game-config";
 import { SimulationEngine } from "@/components/hunger-games/simulation-engine";
 import { VictoryScreen } from "@/components/hunger-games/victory-screen";
 import { IntroTutorial, useIntroTutorial } from "@/components/hunger-games/intro-tutorial";
 import { CopyPromptButton } from "@/components/hunger-games/copy-prompt-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Scroll, Swords, Settings, Sparkles } from "lucide-react";
+import { Users, Scroll, Swords, Settings, Sparkles, Backpack } from "lucide-react";
 
 export default function HungerGamesPage() {
   const searchParams = useSearchParams();
@@ -23,6 +24,7 @@ export default function HungerGamesPage() {
   const [tributes, setTributes] = useLocalStorage<Tribute[]>("ceh-tributes", []);
   const [events, setEvents] = useLocalStorage<GameEvent[]>("ceh-events", []);
   const [config, setConfig] = useLocalStorage<GameConfig>("ceh-config", DEFAULT_CONFIG);
+  const [objects, setObjects] = useLocalStorage<string[]>("ceh-objects", DEFAULT_OBJECTS);
   const [activeTab, setActiveTab] = useState("tributes");
   const [winner, setWinner] = useState<Tribute | null>(null);
   const [finalLogs, setFinalLogs] = useState<SimulationLog[]>([]);
@@ -101,6 +103,7 @@ export default function HungerGamesPage() {
       localStorage.removeItem("ceh-tributes");
       localStorage.removeItem("ceh-events");
       localStorage.removeItem("ceh-config");
+      localStorage.removeItem("ceh-objects");
       localStorage.removeItem("ceh-logo");
       window.location.reload();
     }
@@ -131,7 +134,7 @@ export default function HungerGamesPage() {
           />
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="mx-auto grid w-full max-w-lg grid-cols-4 bg-secondary">
+            <TabsList className="mx-auto grid w-full max-w-xl grid-cols-5 bg-secondary">
               <TabsTrigger value="tributes" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Users size={16} />
                 <span className="hidden sm:inline">Tributi</span>
@@ -139,6 +142,10 @@ export default function HungerGamesPage() {
               <TabsTrigger value="events" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Scroll size={16} />
                 <span className="hidden sm:inline">Eventi</span>
+              </TabsTrigger>
+              <TabsTrigger value="objects" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Backpack size={16} />
+                <span className="hidden sm:inline">Oggetti</span>
               </TabsTrigger>
               <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Settings size={16} />
@@ -156,6 +163,9 @@ export default function HungerGamesPage() {
             <TabsContent value="events" className="animate-fade-in">
               <EventEditor events={events} onEventsChange={setEvents} />
             </TabsContent>
+            <TabsContent value="objects" className="animate-fade-in">
+              <ObjectEditor objects={objects} onObjectsChange={setObjects} />
+            </TabsContent>
             <TabsContent value="config" className="animate-fade-in">
               <GameConfigPanel 
                 config={config} 
@@ -167,6 +177,7 @@ export default function HungerGamesPage() {
               <SimulationEngine
                 tributes={tributes}
                 events={events}
+                objects={objects}
                 config={config}
                 onTributesChange={setTributes}
                 onWinner={handleWinner}

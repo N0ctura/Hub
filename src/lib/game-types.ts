@@ -28,6 +28,8 @@ export interface GameConfig {
   autoPlaySpeed: number;
   deathRate?: number;
   overlayOpacity?: number;
+  soundEnabled?: boolean;
+  soundVolume?: number;
   phaseImages?: {
     day: string;
     night: string;
@@ -71,6 +73,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   feastFrequency: 3,
   autoPlay: false,
   autoPlaySpeed: 2000,
+  soundEnabled: true,
+  soundVolume: 0.5,
   phaseImages: {
     day: "/images/giorno.webp",
     night: "/images/notte.webp",
@@ -78,27 +82,33 @@ export const DEFAULT_CONFIG: GameConfig = {
   }
 };
 
+// Gli oggetti includono già l'articolo: "trova {O}" -> "trova una lancia".
 export const DEFAULT_OBJECTS = [
-  "spada",
-  "arco",
-  "lancia",
-  "pugnale",
-  "ascia",
-  "trappola",
-  "veleno",
-  "rete",
-  "freccia",
-  "pietra",
-  "fionda",
-  "corda",
-  "torcia",
-  "scudo",
-  "mazza",
-  "tridente",
-  "accetta",
-  "bastone",
-  "coltello da lancio",
-  "machete",
+  "una lancia",
+  "un machete",
+  "un'accetta",
+  "una freccia avvelenata",
+  "uno scudo",
+  "del veleno",
+  "una fionda",
+  "un candelabro d'argento",
+  "un paletto di frassino",
+  "una falce",
+  "un coltello da cucina",
+  "una scopa tarlata",
+  "un crocifisso storto",
+  "un bastone da passeggio affilato",
+  "una pala da cimitero",
+  "una corda annodata",
+  "una zucca esplosiva",
+  "un grimorio incompleto",
+  "un'ascia arrugginita",
+  "una boccetta di aglio liquido",
+  "un candelotto di dinamite",
+  "un rasoio d'epoca",
+  "un mestolo di rame",
+  "una torcia spenta",
+  "una campana stonata",
 ];
 
 export const generateDefaultTributes = (): Tribute[] => {

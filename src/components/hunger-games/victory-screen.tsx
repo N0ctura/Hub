@@ -4,6 +4,7 @@ import type { Tribute, SimulationLog } from "@/lib/game-types";
 import { TributeCard } from "./tribute-card";
 import { Button } from "@/components/ui/button";
 import { Trophy, RotateCcw, Copy, Skull, Share2 } from "lucide-react";
+import { BASE_PATH } from "@/lib/base-path";
 
 interface VictoryScreenProps {
   winner: Tribute | null;
@@ -47,7 +48,7 @@ export function VictoryScreen({ winner, tributes, logs, onReset }: VictoryScreen
       t: tributes.map((t) => ({ n: t.name, i: t.image })),
     };
     const encoded = btoa(encodeURIComponent(JSON.stringify(shareData)));
-    const url = `${window.location.origin}/hunger-games?share=${encoded}`;
+    const url = `${window.location.origin}${BASE_PATH}/hunger-games?share=${encoded}`;
     navigator.clipboard.writeText(url);
   };
 

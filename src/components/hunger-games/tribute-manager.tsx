@@ -9,7 +9,7 @@ import { TributeCard } from "./tribute-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Trash2, RotateCcw, Upload, Users } from "lucide-react";
+import { UserPlus, Trash2, RotateCcw, Upload, Users, FolderOpen, Images } from "lucide-react";
 
 interface TributeManagerProps {
   tributes: Tribute[];
@@ -20,6 +20,52 @@ export function TributeManager({ tributes, onTributesChange }: TributeManagerPro
   const [newName, setNewName] = useState("");
   const [newImage, setNewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const multiInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
+
+  // Importa tanti tributi insieme: ogni foto diventa un tributo, il nome è il nome del file.
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const all = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    const files = all
+      .filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(f.name))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    if (files.length === 0) {
+      alert("Nessuna immagine trovata nella selezione.");
+      return;
+    }
+
+    setImporting({ done: 0, total: files.length });
+    const created: Tribute[] = [];
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const image = await compressImage(file, 256, 0.8);
+        const name = file.name.replace(/\.[^./\\]+$/, "").trim().slice(0, 30) || `Tributo ${tributes.length + created.length + 1}`;
+        created.push({
+          id: crypto.randomUUID(),
+          name,
+          image,
+          isAlive: true,
+          kills: 0,
+        });
+      } catch {
+        failed++;
+      }
+      setImporting({ done: i + 1, total: files.length });
+    }
+
+    // Un solo salvataggio alla fine; i distretti vengono assegnati in base alla posizione.
+    const merged = [...tributes, ...created].map((t, idx) => {
+      const d = Math.floor(idx / 2) + 1;
+      return { ...t, district: d, clan: `district-${d}` };
+    });
+    onTributesChange(merged);
+    setImporting(null);
+    if (failed > 0) alert(`${created.length} tributi importati, ${failed} immagini non leggibili.`);
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -133,6 +179,41 @@ export function TributeManager({ tributes, onTributesChange }: TributeManagerPro
               Aggiungi
             </Button>
           </div>
+        </div>
+
+        {/* Import massivo */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+            onChange={handleBulkImport}
+            className="hidden"
+          />
+          <input
+            ref={multiInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleBulkImport}
+            className="hidden"
+          />
+          <Button variant="outline" size="sm" disabled={!!importing} onClick={() => folderInputRef.current?.click()}>
+            <FolderOpen size={16} className="mr-2" />
+            Importa cartella
+          </Button>
+          <Button variant="outline" size="sm" disabled={!!importing} onClick={() => multiInputRef.current?.click()}>
+            <Images size={16} className="mr-2" />
+            Importa più foto
+          </Button>
+          {importing ? (
+            <span className="text-sm text-muted-foreground">
+              Importo {importing.done}/{importing.total}...
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Il nome del file diventa il nome del tributo</span>
+          )}
         </div>
 
         {/* Image Preview */}

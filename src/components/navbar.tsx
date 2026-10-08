@@ -1,5 +1,7 @@
 "use client";
 
+import { compressImage } from "@/lib/image-utils";
+
 import React, { useRef } from "react";
 import Link from "next/link";
 import { Home, ImageIcon, X } from "lucide-react";
@@ -16,14 +18,13 @@ export function Navbar({ logo, onLogoChange, showHome }: NavbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onLogoChange(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      onLogoChange(await compressImage(file, 256, 0.85));
+    } catch {
+      alert("Impossibile leggere questa immagine.");
     }
   };
 

@@ -4,6 +4,7 @@ import React from "react"
 
 import { useState, useRef } from "react";
 import type { Tribute } from "@/lib/game-types";
+import { compressImage } from "@/lib/image-utils";
 import { TributeCard } from "./tribute-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,18 +21,13 @@ export function TributeManager({ tributes, onTributesChange }: TributeManagerPro
   const [newImage, setNewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("L'immagine deve essere inferiore a 5MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      setNewImage(await compressImage(file, 256, 0.8));
+    } catch {
+      alert("Impossibile leggere questa immagine.");
     }
   };
 

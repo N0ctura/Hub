@@ -16,7 +16,8 @@ import { VictoryScreen } from "@/components/hunger-games/victory-screen";
 import { IntroTutorial, useIntroTutorial } from "@/components/hunger-games/intro-tutorial";
 import { CopyPromptButton } from "@/components/hunger-games/copy-prompt-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Scroll, Swords, Settings, Sparkles, Backpack } from "lucide-react";
+import { Users, Scroll, Swords, Settings, Sparkles, Backpack, Download, FolderUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function HungerGamesPage() {
   const searchParams = useSearchParams();
@@ -75,6 +76,43 @@ export default function HungerGamesPage() {
     }
   }, [searchParams, setTributes]);
 
+  const [storageFull, setStorageFull] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const h = () => setStorageFull(true);
+    window.addEventListener("ceh-storage-full", h);
+    return () => window.removeEventListener("ceh-storage-full", h);
+  }, []);
+
+  // BACKUP: salva tributi (con foto), eventi, oggetti, config e logo in un unico file .json
+  const exportBackup = () => {
+    const data = { version: 1, logo, tributes, events, config, objects };
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `celestial-hg-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  const importBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const d = JSON.parse(await file.text());
+      if (Array.isArray(d.tributes)) setTributes(d.tributes);
+      if (Array.isArray(d.events)) setEvents(d.events);
+      if (Array.isArray(d.objects)) setObjects(d.objects);
+      if (d.config && typeof d.config === "object") setConfig({ ...DEFAULT_CONFIG, ...d.config });
+      if (typeof d.logo === "string" || d.logo === null) setLogo(d.logo ?? null);
+      alert("Backup ripristinato!");
+    } catch {
+      alert("File di backup non valido.");
+    }
+  };
+
   const handleWinner = useCallback(
     (w: Tribute | null, logs: SimulationLog[]) => {
       setWinner(w);
@@ -123,6 +161,23 @@ export default function HungerGamesPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Crea la tua arena personalizzata
           </p>
+        </div>
+
+        {storageFull && (
+          <div className="mx-auto mb-4 max-w-3xl rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-center text-sm">
+            Memoria del browser piena: le ultime modifiche non sono state salvate. Esporta un backup e usa foto più piccole.
+          </div>
+        )}
+        <div className="mx-auto mb-6 flex max-w-3xl flex-wrap justify-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportBackup}>
+            <Download size={16} className="mr-2" />
+            Esporta backup (con foto)
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
+            <FolderUp size={16} className="mr-2" />
+            Importa backup
+          </Button>
+          <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={importBackup} />
         </div>
 
         {showVictory ? (

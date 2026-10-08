@@ -1,5 +1,7 @@
 "use client";
 
+import { compressImage } from "@/lib/image-utils";
+
 import type { GameConfig } from "@/lib/game-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -28,27 +30,25 @@ export function GameConfigPanel({ config, onConfigChange, onFullReset }: GameCon
     onConfigChange({ ...config, ...partial });
   };
 
-  const handleImageUpload = (file: File, phase: 'day' | 'night' | 'feast') => {
+  const handleImageUpload = async (file: File, phase: 'day' | 'night' | 'feast') => {
     if (!file) return;
-    
-    // 1MB limit to be safe with localStorage
-    if (file.size > 1024 * 1024) {
-      alert("L'immagine è troppo grande (max 1MB). Per favore comprimila o scegline una più piccola.");
+    let base64: string;
+    try {
+      base64 = await compressImage(file, 1280, 0.8);
+    } catch {
+      alert("Impossibile leggere questa immagine.");
       return;
     }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      const currentImages = config.phaseImages || DEFAULT_CONFIG.phaseImages!;
-      update({
-        phaseImages: {
-          ...currentImages,
-          [phase]: base64
-        }
-      });
-    };
-    reader.readAsDataURL(file);
+    const currentImages = config.phaseImages || DEFAULT_CONFIG.phaseImages!;
+    update({
+      phaseImages: {
+        ...currentImages,
+        [phase]: base64
+      }
+    });
+    if (phase === 'day' && dayInputRef.current) dayInputRef.current.value = "";
+    if (phase === 'night' && nightInputRef.current) nightInputRef.current.value = "";
+    if (phase === 'feast' && feastInputRef.current) feastInputRef.current.value = "";
   };
 
   const resetImage = (phase: 'day' | 'night' | 'feast') => {

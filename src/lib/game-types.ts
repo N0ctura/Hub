@@ -585,11 +585,18 @@ export const DEFAULT_FEAST_EVENTS: GameEvent[] = [
 const normText = (t: string) =>
   t.toLowerCase().replace(/\{[^}]*\}/g, "x").replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
 
-/** Chiavi che identificano una frase: id, apertura (prime 3 parole) e chiusa (ultima frase). */
+/**
+ * Chiavi che identificano una frase: id, "schema" dell'azione (le 3 parole dopo il primo
+ * nome, es. "bussa alla porta", cosi' i prefissi d'ambiente non lo mascherano),
+ * apertura (prime 3 parole) e chiusa (ultima frase).
+ */
 export function eventKeys(e: { id: string; text: string }): string[] {
   const keys = [e.id];
-  const open = normText(e.text).split(" ").slice(0, 3).join(" ");
+  const words = normText(e.text).split(" ");
+  const open = words.slice(0, 3).join(" ");
   if (open) keys.push("o:" + open);
+  const px = words.indexOf("x");
+  if (px >= 0 && words.length - px > 3) keys.push("f:" + words.slice(px + 1, px + 4).join(" "));
   const sentences = e.text.split(/(?<=[.!?»]) /);
   if (sentences.length > 1) {
     const end = normText(sentences[sentences.length - 1]);

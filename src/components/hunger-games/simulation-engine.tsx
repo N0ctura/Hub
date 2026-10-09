@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Tribute, GameEvent, GameConfig, GameState, SimulationLog, SimulatedEvent } from "@/lib/game-types";
-import { DEFAULT_OBJECTS, DEFAULT_CONFIG } from "@/lib/game-types";
+import { DEFAULT_OBJECTS, DEFAULT_CONFIG, eventKeys } from "@/lib/game-types";
 import { TributeCard } from "./tribute-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,13 +83,19 @@ export function SimulationEngine({
     deathRateConfig: number = 0.5,
     aliveCount: number = 24,
     usedThisPhase: Set<string> = new Set(),
-    recentIds: Set<string> = new Set()
+    recentIds: Set<string> = new Set(),
+    blocked: Set<string> = new Set()
   ): GameEvent | null => {
     if (pool.length === 0) return null;
 
     // Non ripetere la stessa frase nello stesso round, se ci sono alternative
     const fresh = pool.filter((e) => !usedThisPhase.has(e.id));
-    const candidates = fresh.length > 0 ? fresh : pool;
+    // Cooldown: niente frasi con stesso id, stessa apertura o stessa chiusa
+    // usate nelle ultime N fasi dello stesso tipo. Se il pool si svuota, si rilassa a gradi.
+    const idOk = fresh.filter((e) => !blocked.has(e.id));
+    const strict = idOk.filter((e) => !eventKeys(e).some((k) => blocked.has(k)));
+    const candidates =
+      strict.length > 0 ? strict : idOk.length > 0 ? idOk : fresh.length > 0 ? fresh : pool;
 
     // Mortalita' dinamica: i giorni iniziali sono piu' tranquilli (0.5x),
     // poi cresce di 0.25 al giorno fino a 2.5x.
@@ -273,6 +279,22 @@ export function SimulationEngine({
           .filter((id): id is string => Boolean(id))
       );
       
+      // Frasi "in cooldown": quelle delle ultime N fasi dello stesso tipo
+      const cooldown = config.phraseCooldown ?? 3;
+      const blocked = new Set<string>();
+      if (cooldown > 0) {
+        const byId = new Map(events.map((ev) => [ev.id, ev]));
+        gameState.logs
+          .filter((log) => log.phase === phaseType)
+          .slice(-cooldown)
+          .forEach((log) =>
+            log.events.forEach((se) => {
+              const ev = se.originalEventId ? byId.get(se.originalEventId) : undefined;
+              if (ev) eventKeys(ev).forEach((k) => blocked.add(k));
+            })
+          );
+      }
+
       let i = 0;
       while (i < shuffledAlive.length) {
         // Get currently available tributes (those still alive in simulation)
@@ -305,7 +327,8 @@ export function SimulationEngine({
             config.deathRate,
             alive.length,
             usedThisPhase,
-            recentIds
+            recentIds,
+            blocked
           );
           
           if (randomEvent) {
@@ -320,7 +343,13 @@ export function SimulationEngine({
         }
 
         if (result) {
-          if (result.originalEventId) usedThisPhase.add(result.originalEventId);
+          if (result.originalEventId) {
+            usedThisPhase.add(result.originalEventId);
+            if (cooldown > 0) {
+              const used = events.find((ev) => ev.id === result!.originalEventId);
+              if (used) eventKeys(used).forEach((k) => blocked.add(k));
+            }
+          }
           simulatedEvents.push(result);
           result.participants.forEach(pid => processedIds.add(pid));
         } else {
@@ -340,7 +369,7 @@ export function SimulationEngine({
         isRunning: true,
       }));
     },
-    [tributes, events, objects, onWinner, gameState.logs, config.deathRate, gameState.currentPhaseNumber]
+    [tributes, events, objects, onWinner, gameState.logs, config.deathRate, config.phraseCooldown, gameState.currentPhaseNumber]
   );
   
   // I'll implement the loop properly inside the replacement string.

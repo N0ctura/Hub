@@ -3,11 +3,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
 // Salvataggio sicuro: un errore di quota/parsing NON deve mai far crashare la pagina.
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void, boolean] {
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(initialValue);
   const latest = useRef<T>(initialValue);
-  // true solo DOPO aver letto il localStorage (evita di sovrascrivere i dati salvati con i default)
-  const [hydrated, setHydrated] = useState(false);
+  const loaded = useRef(false);
 
   useEffect(() => {
     try {
@@ -21,7 +20,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       console.error(`Error reading localStorage key "${key}":`, error);
       try { window.localStorage.removeItem(key); } catch {}
     }
-    setHydrated(true);
+    loaded.current = true;
   }, [key]);
 
   const setValue = useCallback(
@@ -42,5 +41,5 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
     [key]
   );
 
-  return [storedValue, setValue, hydrated];
+  return [storedValue, setValue];
 }

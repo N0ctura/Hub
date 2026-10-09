@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 export default function HungerGamesPage() {
   const searchParams = useSearchParams();
   const [logo, setLogo] = useLocalStorage<string | null>("ceh-logo", null);
-  const [tributes, setTributes, tributesLoaded] = useLocalStorage<Tribute[]>("ceh-tributes", []);
+  const [tributes, setTributes] = useLocalStorage<Tribute[]>("ceh-tributes", []);
   const [events, setEvents] = useLocalStorage<GameEvent[]>("ceh-events", []);
   const [config, setConfig] = useLocalStorage<GameConfig>("ceh-config", DEFAULT_CONFIG);
   const [objects, setObjects] = useLocalStorage<string[]>("ceh-objects", DEFAULT_OBJECTS);
@@ -45,14 +45,11 @@ export default function HungerGamesPage() {
 
   const defaultsLoaded = useRef(false);
   useEffect(() => {
-    // Aspetta che il localStorage sia stato letto: prima "tributes" è vuoto per forza
-    // e i default sovrascriverebbero i tributi salvati.
-    if (!tributesLoaded) return;
     if (!defaultsLoaded.current && tributes.length === 0) {
       defaultsLoaded.current = true;
       setTributes(generateDefaultTributes());
     }
-  }, [tributesLoaded, tributes.length, setTributes]);
+  }, [tributes.length, setTributes]);
 
   useEffect(() => {
     const shareData = searchParams.get("share");

@@ -168,6 +168,23 @@ export function GameConfigPanel({ config, onConfigChange, onFullReset }: GameCon
              </p>
           </div>
 
+          <div className="space-y-2">
+            <Label className="text-sm">
+              Anti-ripetizione frasi: {(config.phraseCooldown ?? 3) === 0 ? "disattivata" : `${config.phraseCooldown ?? 3} fasi`}
+            </Label>
+            <Slider
+              value={[config.phraseCooldown ?? 3]}
+              onValueChange={([v]) => update({ phraseCooldown: v })}
+              min={0}
+              max={8}
+              step={1}
+            />
+            <p className="text-xs text-muted-foreground">
+              Una frase non può ripetersi per N giorni/notti/banchetti. Vale anche per frasi con la stessa apertura
+              (es. «X bussa alla porta…») o la stessa battuta finale. Se gli eventi disponibili finiscono, il filtro si allenta da solo.
+            </p>
+          </div>
+
           <div className="flex items-center justify-between rounded-lg bg-secondary/30 p-4">
             <div>
               <Label className="text-sm font-medium">Auto-Play</Label>

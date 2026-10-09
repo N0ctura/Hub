@@ -28,6 +28,8 @@ export interface GameConfig {
   autoPlaySpeed: number;
   deathRate?: number;
   overlayOpacity?: number;
+  /** Per quante fasi dello stesso tipo una frase (e il suo schema) non puo' ripetersi. 0 = disattivato */
+  phraseCooldown?: number;
   soundEnabled?: boolean;
   soundVolume?: number;
   phaseImages?: {
@@ -75,6 +77,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   autoPlaySpeed: 2000,
   soundEnabled: true,
   soundVolume: 0.5,
+  phraseCooldown: 3,
   phaseImages: {
     day: "/images/giorno.webp",
     night: "/images/notte.webp",
@@ -577,3 +580,20 @@ export const DEFAULT_FEAST_EVENTS: GameEvent[] = [
   { id: "f129", text: "{P1} sgozza {P2} con un coltello da caccia.", type: "feast", isFatal: true, killCount: 1, killer: 1, victims: [2], weight: 5 },
   { id: "f130", text: "{P1} viene pugnalato ripetutamente da {P2} alla Cornucopia.", type: "feast", isFatal: true, killCount: 1, killer: 2, victims: [1], weight: 5 },
 ];
+
+// ---- Anti-ripetizione frasi ----
+const normText = (t: string) =>
+  t.toLowerCase().replace(/\{[^}]*\}/g, "x").replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
+
+/** Chiavi che identificano una frase: id, apertura (prime 3 parole) e chiusa (ultima frase). */
+export function eventKeys(e: { id: string; text: string }): string[] {
+  const keys = [e.id];
+  const open = normText(e.text).split(" ").slice(0, 3).join(" ");
+  if (open) keys.push("o:" + open);
+  const sentences = e.text.split(/(?<=[.!?»]) /);
+  if (sentences.length > 1) {
+    const end = normText(sentences[sentences.length - 1]);
+    if (end.length > 12) keys.push("e:" + end);
+  }
+  return keys;
+}

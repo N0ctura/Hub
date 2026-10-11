@@ -3,7 +3,8 @@
 import type { Tribute, SimulationLog } from "@/lib/game-types";
 import { TributeCard } from "./tribute-card";
 import { Button } from "@/components/ui/button";
-import { Trophy, RotateCcw, Copy, Skull, Share2 } from "lucide-react";
+import { Trophy, RotateCcw, Copy, Skull, Share2, Smartphone } from "lucide-react";
+import { downloadReplayHtml } from "@/lib/replay-html";
 import { BASE_PATH } from "@/lib/base-path";
 
 interface VictoryScreenProps {
@@ -137,6 +138,10 @@ export function VictoryScreen({ winner, tributes, logs, onReset }: VictoryScreen
         <Button onClick={shareLink} variant="outline" size="lg">
           <Share2 size={20} className="mr-2" />
           Condividi Link
+        </Button>
+        <Button onClick={() => downloadReplayHtml({ tributes, winner, logs })} variant="outline" size="lg">
+          <Smartphone size={20} className="mr-2" />
+          Scarica Replay (HTML)
         </Button>
         <Button onClick={onReset} className="btn-gold" size="lg">
           <RotateCcw size={20} className="mr-2" />

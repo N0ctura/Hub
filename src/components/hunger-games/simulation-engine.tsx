@@ -701,7 +701,7 @@ export function SimulationEngine({
           <div 
             ref={eventListRef}
             style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,180,40,.55) transparent" }}
-            className="grid min-w-0 flex-grow grid-cols-1 content-start gap-2 min-h-[12rem] max-h-[calc(100vh-17rem)] overflow-y-auto p-2 rounded-lg bg-black/20 xl:grid-cols-2"
+            className="grid min-w-0 flex-grow grid-cols-1 content-start gap-2 min-h-[12rem] max-h-[calc(100vh-17rem)] overflow-y-auto p-2 rounded-lg bg-black/20"
           >
             {gameState.pendingEvents.slice(0, gameState.currentStep).map((event) => (
               <div

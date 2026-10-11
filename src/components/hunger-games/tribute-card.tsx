@@ -71,7 +71,7 @@ export function TributeCard({ tribute, size = "md", onRemove, showKills = false 
       </div>
 
       <span
-        className={`max-w-[80px] truncate text-center font-medium ${
+        className={`max-w-[100px] truncate text-center font-medium ${
           tribute.isAlive ? "text-foreground" : "text-muted-foreground line-through"
         }`}
       >

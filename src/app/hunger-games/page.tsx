@@ -22,11 +22,21 @@ import { Button } from "@/components/ui/button";
 export default function HungerGamesPage() {
   const searchParams = useSearchParams();
   const [logo, setLogo] = useLocalStorage<string | null>("ceh-logo", null);
-  const [tributes, setTributes] = useLocalStorage<Tribute[]>("ceh-tributes", []);
+  const [tributes, setTributes, tributesLoaded] = useLocalStorage<Tribute[]>("ceh-tributes", []);
   const [events, setEvents] = useLocalStorage<GameEvent[]>("ceh-events", []);
   const [config, setConfig] = useLocalStorage<GameConfig>("ceh-config", DEFAULT_CONFIG);
   const [objects, setObjects] = useLocalStorage<string[]>("ceh-objects", DEFAULT_OBJECTS);
   const [activeTab, setActiveTab] = useState("tributes");
+  // Zoom dell'interfaccia (utile per lo streaming): scala tutta la pagina via root font-size
+  const [uiScale, setUiScale] = useLocalStorage<number>("ceh-ui-scale", 80);
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = root.style.fontSize;
+    root.style.fontSize = `${(16 * uiScale) / 100}px`;
+    return () => {
+      root.style.fontSize = prev;
+    };
+  }, [uiScale]);
   const [winner, setWinner] = useState<Tribute | null>(null);
   const [finalLogs, setFinalLogs] = useState<SimulationLog[]>([]);
   const [showVictory, setShowVictory] = useState(false);
@@ -45,11 +55,14 @@ export default function HungerGamesPage() {
 
   const defaultsLoaded = useRef(false);
   useEffect(() => {
+    // Aspetta che il localStorage sia stato letto: prima "tributes" è vuoto per forza
+    // e i default sovrascriverebbero i tributi salvati.
+    if (!tributesLoaded) return;
     if (!defaultsLoaded.current && tributes.length === 0) {
       defaultsLoaded.current = true;
       setTributes(generateDefaultTributes());
     }
-  }, [tributes.length, setTributes]);
+  }, [tributesLoaded, tributes.length, setTributes]);
 
   useEffect(() => {
     const shareData = searchParams.get("share");
@@ -152,13 +165,17 @@ export default function HungerGamesPage() {
       <ParticleBackground />
       <Navbar logo={logo} onLogoChange={setLogo} showHome />
 
-      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-8 text-center">
-          <h1 className="gold-text flex items-center justify-center gap-3 font-serif text-3xl font-bold tracking-wide sm:text-4xl">
+      <main
+        className={`relative z-10 mx-auto px-3 py-3 sm:px-6 ${
+          activeTab === "arena" && !showVictory ? "max-w-[1800px]" : "max-w-6xl"
+        }`}
+      >
+        <div className="mb-3 text-center">
+          <h1 className="gold-text flex items-center justify-center gap-3 font-serif text-2xl font-bold tracking-wide sm:text-3xl">
             <Sparkles className="text-primary" size={28} />
             Hunger Games Simulator
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             Crea la tua arena personalizzata
           </p>
         </div>
@@ -168,7 +185,7 @@ export default function HungerGamesPage() {
             Memoria del browser piena: le ultime modifiche non sono state salvate. Esporta un backup e usa foto più piccole.
           </div>
         )}
-        <div className="mx-auto mb-6 flex max-w-3xl flex-wrap justify-center gap-2">
+        <div className="mx-auto mb-3 flex max-w-3xl flex-wrap items-center justify-center gap-2">
           <Button variant="outline" size="sm" onClick={exportBackup}>
             <Download size={16} className="mr-2" />
             Esporta backup (con foto)
@@ -178,6 +195,21 @@ export default function HungerGamesPage() {
             Importa backup
           </Button>
           <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={importBackup} />
+          <div className="ml-2 flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Zoom</span>
+            {[60, 70, 80, 90, 100].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setUiScale(v)}
+                className={`rounded border px-2 py-0.5 transition-colors ${
+                  uiScale === v ? "border-primary text-primary" : "border-border hover:border-primary/50"
+                }`}
+              >
+                {v}%
+              </button>
+            ))}
+          </div>
         </div>
 
         {showVictory ? (
@@ -188,7 +220,7 @@ export default function HungerGamesPage() {
             onReset={handleReset}
           />
         ) : (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
             <TabsList className="mx-auto grid w-full max-w-xl grid-cols-5 bg-secondary">
               <TabsTrigger value="tributes" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Users size={16} />
@@ -242,7 +274,7 @@ export default function HungerGamesPage() {
         )}
 
         {!showVictory && (
-          <div className="mx-auto mt-8 grid max-w-3xl grid-cols-3 gap-4 sm:grid-cols-5">
+          <div className="mx-auto mt-4 grid max-w-3xl grid-cols-3 gap-3 sm:grid-cols-5">
             <div className="card-game p-4 text-center">
               <p className="text-2xl font-bold text-primary">{tributes.length}</p>
               <p className="text-xs text-muted-foreground">Tributi</p>

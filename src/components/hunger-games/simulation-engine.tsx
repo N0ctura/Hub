@@ -90,7 +90,7 @@ export function SimulationEngine({
 
     // Non ripetere la stessa frase nello stesso round, se ci sono alternative
     const fresh = pool.filter((e) => !usedThisPhase.has(e.id));
-    // Cooldown: niente frasi con stesso id, stessa apertura o stessa chiusa
+    // Cooldown: niente frasi con stesso id, stesso schema, stessa apertura o stessa chiusa
     // usate nelle ultime N fasi dello stesso tipo. Se il pool si svuota, si rilassa a gradi.
     const idOk = fresh.filter((e) => !blocked.has(e.id));
     const strict = idOk.filter((e) => !eventKeys(e).some((k) => blocked.has(k)));
@@ -561,7 +561,7 @@ export function SimulationEngine({
   };
 
   // Render Helpers
-  const renderDistrictGrid = () => {
+  const renderDistrictGrid = (compact = false) => {
     const groupedTributes = tributes.reduce((acc, tribute) => {
       const district = tribute.district || 0;
       if (!acc[district]) acc[district] = [];
@@ -570,20 +570,26 @@ export function SimulationEngine({
     }, {} as Record<number, Tribute[]>);
 
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 animate-fade-in">
+      <div
+        className={`grid gap-2 animate-fade-in ${
+          compact
+            ? "grid-cols-3 2xl:grid-cols-4"
+            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+        }`}
+      >
         {Object.entries(groupedTributes)
           .sort(([a], [b]) => Number(a) - Number(b))
           .map(([district, districtTributes]) => (
             <div
               key={district}
-              className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/5 p-4"
+              className="flex flex-col gap-1 rounded-xl border border-primary/20 bg-primary/5 p-2"
             >
-              <div className="text-center text-xs font-bold tracking-widest text-primary/80">
+              <div className="text-center text-[10px] font-bold tracking-widest text-primary/80">
                 {Number(district) > 0 ? `DISTRETTO ${district}` : "SCONOSCIUTO"}
               </div>
               <div className="flex items-center justify-around">
                 {districtTributes.map((tribute) => (
-                  <TributeCard key={tribute.id} tribute={tribute} size="md" showKills />
+                  <TributeCard key={tribute.id} tribute={tribute} size={compact ? "sm" : "md"} showKills />
                 ))}
               </div>
             </div>
@@ -619,7 +625,7 @@ export function SimulationEngine({
   const bgImage = getPhaseBackgroundImage();
 
   return (
-    <Card className="card-game relative min-h-[80vh] flex flex-col overflow-hidden isolate">
+    <Card className="card-game relative min-h-[calc(100vh-14rem)] flex flex-col overflow-hidden isolate">
       {/* Dynamic Background Layer */}
       {bgImage && (
         <>
@@ -649,7 +655,7 @@ export function SimulationEngine({
         }
       `}</style>
 
-      <CardHeader>
+      <CardHeader className="py-3">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 font-serif">
           <div className="flex items-center gap-2">
             <Trophy className="text-primary" />
@@ -669,18 +675,37 @@ export function SimulationEngine({
         </CardTitle>
       </CardHeader>
       
-      <CardContent className="flex-grow space-y-6 flex flex-col relative z-10">
+      <CardContent className="flex-grow space-y-3 flex flex-col relative z-10">
         
+        {/* SUMMARY LOG (Miniaturized for Summary Phase) */}
+        {gameState.currentPhase === "summary" && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 mb-4">
+            <p className="flex items-center gap-2 font-medium text-destructive text-lg mb-2">
+              <Skull size={20} />
+              Caduti in questa fase
+            </p>
+            <p className="text-base text-muted-foreground">
+              {gameState.logs[gameState.logs.length - 1]?.deaths.length > 0 
+                ? gameState.logs[gameState.logs.length - 1].deaths
+                    .map((id) => tributes.find((t) => t.id === id)?.name)
+                    .filter(Boolean)
+                    .join(", ")
+                : "Nessun morto in questa fase."}
+            </p>
+          </div>
+        )}
+
+        <div className={isSimulating ? "grid flex-grow items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]" : "flex flex-col gap-3"}>
         {/* NARRATIVE AREA (Top Focus) */}
         {isSimulating && (
           <div 
             ref={eventListRef}
-            className="flex-grow max-h-[60vh] overflow-y-auto space-y-3 p-2 rounded-lg bg-black/20"
+            className="min-w-0 flex-grow min-h-[12rem] max-h-[calc(100vh-23rem)] overflow-y-auto space-y-2 p-2 rounded-lg bg-black/20"
           >
             {gameState.pendingEvents.slice(0, gameState.currentStep).map((event) => (
               <div
                 key={event.id}
-                className={`animate-fade-in rounded-lg p-4 shadow-md ${
+                className={`animate-fade-in rounded-lg p-3 shadow-md ${
                   event.deaths.length > 0 ? "border-l-4 border-l-destructive animate-shake" : "border-l-4 border-l-primary/20"
                 }`}
                 style={{
@@ -689,7 +714,7 @@ export function SimulationEngine({
                 }}
               >
                 {/* Tribute Images */}
-                <div className="flex flex-wrap justify-center gap-4 mb-3">
+                <div className="flex flex-wrap justify-center gap-3 mb-2">
                   {event.participants.map((participantId) => {
                     const tribute = tributes.find((t) => t.id === participantId);
                     if (!tribute) return null;
@@ -743,28 +768,12 @@ export function SimulationEngine({
           </div>
         )}
 
-        {/* SUMMARY LOG (Miniaturized for Summary Phase) */}
-        {gameState.currentPhase === "summary" && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 mb-4">
-            <p className="flex items-center gap-2 font-medium text-destructive text-lg mb-2">
-              <Skull size={20} />
-              Caduti in questa fase
-            </p>
-            <p className="text-base text-muted-foreground">
-              {gameState.logs[gameState.logs.length - 1]?.deaths.length > 0 
-                ? gameState.logs[gameState.logs.length - 1].deaths
-                    .map((id) => tributes.find((t) => t.id === id)?.name)
-                    .filter(Boolean)
-                    .join(", ")
-                : "Nessun morto in questa fase."}
-            </p>
-          </div>
-        )}
-
         {/* TRIBUTES GRID (Bottom / Hidden during Focus) */}
-        <div className={`transition-all duration-500 ${isSimulating ? "opacity-10 blur-sm pointer-events-none scale-95 grayscale" : "opacity-100"}`}>
+        <div className={`min-w-0 transition-all duration-500 ${isSimulating ? "hidden xl:block xl:max-h-[calc(100vh-23rem)] xl:overflow-y-auto" : ""}`}>
           {showSummaryGrid ? (
             renderDistrictGrid()
+          ) : isSimulating ? (
+            renderDistrictGrid(true)
           ) : (
             /* Flat Grid for Setup/Running (blurred) */
             <div className="grid grid-cols-6 gap-3 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
@@ -773,6 +782,8 @@ export function SimulationEngine({
               ))}
             </div>
           )}
+        </div>
+
         </div>
 
       </CardContent>

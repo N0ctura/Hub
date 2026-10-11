@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type { Tribute, GameEvent, GameConfig, SimulationLog } from "@/lib/game-types";
 import { DEFAULT_CONFIG, DEFAULT_OBJECTS, generateDefaultTributes } from "@/lib/game-types";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { shrinkDataUrl } from "@/lib/image-utils";
 import { ParticleBackground } from "@/components/particle-background";
 import { Navbar } from "@/components/navbar";
 import { TributeManager } from "@/components/hunger-games/tribute-manager";
@@ -52,6 +53,34 @@ export default function HungerGamesPage() {
       }));
     }
   }, [config, setConfig]);
+
+  // Migrazione una tantum: ricomprime le vecchie foto enormi che riempiono la memoria del browser
+  const shrunk = useRef(false);
+  useEffect(() => {
+    if (!tributesLoaded || shrunk.current) return;
+    shrunk.current = true;
+    (async () => {
+      const BIG = 60_000;
+      if (tributes.some((t) => t.image && t.image.length > BIG)) {
+        const next = await Promise.all(
+          tributes.map(async (t) =>
+            t.image && t.image.length > BIG ? { ...t, image: await shrinkDataUrl(t.image, 256, 0.8) } : t
+          )
+        );
+        setTributes(next);
+      }
+      if (logo && logo.length > BIG) setLogo(await shrinkDataUrl(logo, 256, 0.85));
+      const pi = config.phaseImages;
+      if (pi && Object.values(pi).some((v) => v.startsWith("data:") && v.length > 400_000)) {
+        const [day, night, feast] = await Promise.all(
+          (["day", "night", "feast"] as const).map((k) =>
+            pi[k].startsWith("data:") && pi[k].length > 400_000 ? shrinkDataUrl(pi[k], 1280, 0.75) : Promise.resolve(pi[k])
+          )
+        );
+        setConfig({ ...config, phaseImages: { day, night, feast } });
+      }
+    })();
+  }, [tributesLoaded, tributes, logo, config, setTributes, setLogo, setConfig]);
 
   const defaultsLoaded = useRef(false);
   useEffect(() => {

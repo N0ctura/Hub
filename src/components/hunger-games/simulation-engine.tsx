@@ -598,6 +598,48 @@ export function SimulationEngine({
     );
   };
 
+  // Roster piatto e compatto per la fase di gioco: solo avatar + nome, niente riquadri dei distretti
+  const renderFlatRoster = () => (
+    <div className="grid gap-x-1 gap-y-2 p-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}>
+      {tributes.map((t) => (
+        <div key={t.id} className="flex flex-col items-center gap-0.5" title={t.name}>
+          <div className="relative">
+            <div
+              className={`h-11 w-11 overflow-hidden rounded-full border-2 ${
+                t.isAlive ? "border-primary" : "border-muted grayscale opacity-50"
+              }`}
+            >
+              {t.image ? (
+                <img src={withBase(t.image)} alt={t.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-secondary text-xs font-bold">
+                  {t.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            {!t.isAlive && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55">
+                <Skull className="h-5 w-5 text-destructive" />
+              </div>
+            )}
+            {t.kills > 0 && (
+              <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-destructive text-[9px] font-bold text-destructive-foreground">
+                {t.kills}
+              </div>
+            )}
+          </div>
+          <span
+            className={`max-w-[70px] truncate text-center text-[11px] font-medium leading-tight ${
+              t.isAlive ? "text-foreground" : "text-muted-foreground line-through"
+            }`}
+          >
+            {t.name}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
   const isSimulating = gameState.isRunning && gameState.currentPhase !== "summary" && gameState.currentPhase !== "finished";
   const showSummaryGrid = gameState.currentPhase === "summary" || gameState.currentPhase === "finished" || gameState.currentPhase === "setup";
 
@@ -700,12 +742,13 @@ export function SimulationEngine({
         {isSimulating && (
           <div 
             ref={eventListRef}
+            style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,180,40,.55) transparent" }}
             className="min-w-0 flex-grow min-h-[12rem] max-h-[calc(100vh-23rem)] overflow-y-auto space-y-2 p-2 rounded-lg bg-black/20"
           >
             {gameState.pendingEvents.slice(0, gameState.currentStep).map((event) => (
               <div
                 key={event.id}
-                className={`animate-fade-in rounded-lg p-3 shadow-md ${
+                className={`animate-fade-in rounded-lg p-2 shadow-md ${
                   event.deaths.length > 0 ? "border-l-4 border-l-destructive animate-shake" : "border-l-4 border-l-primary/20"
                 }`}
                 style={{
@@ -714,7 +757,7 @@ export function SimulationEngine({
                 }}
               >
                 {/* Tribute Images */}
-                <div className="flex flex-wrap justify-center gap-3 mb-2">
+                <div className="flex flex-wrap justify-center gap-2 mb-1">
                   {event.participants.map((participantId) => {
                     const tribute = tributes.find((t) => t.id === participantId);
                     if (!tribute) return null;
@@ -725,12 +768,12 @@ export function SimulationEngine({
                           <img
                             src={withBase(tribute.image)}
                             alt={tribute.name}
-                            className="w-16 h-16 rounded-md border-2 border-primary/50 object-cover shadow-lg transition-transform hover:scale-105"
+                            className="w-12 h-12 rounded-md border-2 border-primary/50 object-cover shadow-lg transition-transform hover:scale-105"
                             title={tribute.name}
                           />
                         ) : (
                           <div 
-                            className="w-16 h-16 rounded-md border-2 border-primary/50 shadow-lg flex items-center justify-center bg-accent text-accent-foreground text-xl font-bold select-none"
+                            className="w-12 h-12 rounded-md border-2 border-primary/50 shadow-lg flex items-center justify-center bg-accent text-accent-foreground text-xl font-bold select-none"
                             title={tribute.name}
                           >
                             {tribute.name.substring(0, 2).toUpperCase()}
@@ -743,7 +786,7 @@ export function SimulationEngine({
                         {/* Death Indicator overlay */}
                         {event.deaths.includes(participantId) && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-md">
-                            <Skull className="text-destructive w-8 h-8" />
+                            <Skull className="text-destructive w-6 h-6" />
                           </div>
                         )}
                       </div>
@@ -751,7 +794,7 @@ export function SimulationEngine({
                   })}
                 </div>
 
-                <p className="text-lg font-medium leading-relaxed text-center">{event.text}</p>
+                <p className="text-base font-medium leading-snug text-center">{event.text}</p>
                 {event.deaths.length > 0 && (
                   <p className="mt-2 text-sm text-destructive font-bold uppercase tracking-wider flex items-center gap-2">
                     <Skull size={16} />
@@ -769,11 +812,11 @@ export function SimulationEngine({
         )}
 
         {/* TRIBUTES GRID (Bottom / Hidden during Focus) */}
-        <div className={`min-w-0 transition-all duration-500 ${isSimulating ? "hidden xl:block xl:max-h-[calc(100vh-23rem)] xl:overflow-y-auto" : ""}`}>
+        <div style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,180,40,.55) transparent" }} className={`min-w-0 transition-all duration-500 ${isSimulating ? "hidden xl:block xl:max-h-[calc(100vh-23rem)] xl:overflow-y-auto" : ""}`}>
           {showSummaryGrid ? (
             renderDistrictGrid()
           ) : isSimulating ? (
-            renderDistrictGrid(true)
+            renderFlatRoster()
           ) : (
             /* Flat Grid for Setup/Running (blurred) */
             <div className="grid grid-cols-6 gap-3 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">

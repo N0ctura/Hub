@@ -598,48 +598,6 @@ export function SimulationEngine({
     );
   };
 
-  // Roster piatto e compatto per la fase di gioco: solo avatar + nome, niente riquadri dei distretti
-  const renderFlatRoster = () => (
-    <div className="grid gap-x-1 gap-y-2 p-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}>
-      {tributes.map((t) => (
-        <div key={t.id} className="flex flex-col items-center gap-0.5" title={t.name}>
-          <div className="relative">
-            <div
-              className={`h-11 w-11 overflow-hidden rounded-full border-2 ${
-                t.isAlive ? "border-primary" : "border-muted grayscale opacity-50"
-              }`}
-            >
-              {t.image ? (
-                <img src={withBase(t.image)} alt={t.name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-secondary text-xs font-bold">
-                  {t.name.substring(0, 2).toUpperCase()}
-                </div>
-              )}
-            </div>
-            {!t.isAlive && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55">
-                <Skull className="h-5 w-5 text-destructive" />
-              </div>
-            )}
-            {t.kills > 0 && (
-              <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-destructive text-[9px] font-bold text-destructive-foreground">
-                {t.kills}
-              </div>
-            )}
-          </div>
-          <span
-            className={`max-w-[70px] truncate text-center text-[11px] font-medium leading-tight ${
-              t.isAlive ? "text-foreground" : "text-muted-foreground line-through"
-            }`}
-          >
-            {t.name}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-
   const isSimulating = gameState.isRunning && gameState.currentPhase !== "summary" && gameState.currentPhase !== "finished";
   const showSummaryGrid = gameState.currentPhase === "summary" || gameState.currentPhase === "finished" || gameState.currentPhase === "setup";
 
@@ -737,13 +695,13 @@ export function SimulationEngine({
           </div>
         )}
 
-        <div className={isSimulating ? "grid flex-grow items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]" : "flex flex-col gap-3"}>
+        <div className={isSimulating ? "flex-grow" : "flex flex-col gap-3"}>
         {/* NARRATIVE AREA (Top Focus) */}
         {isSimulating && (
           <div 
             ref={eventListRef}
             style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,180,40,.55) transparent" }}
-            className="min-w-0 flex-grow min-h-[12rem] max-h-[calc(100vh-23rem)] overflow-y-auto space-y-2 p-2 rounded-lg bg-black/20"
+            className="grid min-w-0 flex-grow grid-cols-1 content-start gap-2 min-h-[12rem] max-h-[calc(100vh-17rem)] overflow-y-auto p-2 rounded-lg bg-black/20 xl:grid-cols-2"
           >
             {gameState.pendingEvents.slice(0, gameState.currentStep).map((event) => (
               <div
@@ -804,29 +762,27 @@ export function SimulationEngine({
               </div>
             ))}
             {gameState.currentStep === 0 && (
-              <div className="text-center text-muted-foreground py-10 italic">
+              <div className="col-span-full text-center text-muted-foreground py-10 italic">
                 La fase sta per iniziare...
               </div>
             )}
           </div>
         )}
 
-        {/* TRIBUTES GRID (Bottom / Hidden during Focus) */}
-        <div style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,180,40,.55) transparent" }} className={`min-w-0 transition-all duration-500 ${isSimulating ? "hidden xl:block xl:max-h-[calc(100vh-23rem)] xl:overflow-y-auto" : ""}`}>
-          {showSummaryGrid ? (
-            renderDistrictGrid()
-          ) : isSimulating ? (
-            renderFlatRoster()
-          ) : (
-            /* Flat Grid for Setup/Running (blurred) */
-            <div className="grid grid-cols-6 gap-3 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
-              {tributes.map((tribute) => (
-                <TributeCard key={tribute.id} tribute={tribute} size="sm" showKills />
-              ))}
-            </div>
-          )}
-        </div>
-
+        {/* TRIBUTES GRID: non mostrato durante la simulazione, solo il feed eventi */}
+        {!isSimulating && (
+          <div className="min-w-0">
+            {showSummaryGrid ? (
+              renderDistrictGrid()
+            ) : (
+              <div className="grid grid-cols-6 gap-3 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
+                {tributes.map((tribute) => (
+                  <TributeCard key={tribute.id} tribute={tribute} size="sm" showKills />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         </div>
 
       </CardContent>

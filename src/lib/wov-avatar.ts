@@ -28,6 +28,10 @@ export interface WovLayerSpec {
   key: string;
   url: string;
   z: number;
+  /** "body" = parti del body paint (omino), "item" = tutto il resto. */
+  kind: "body" | "item";
+  /** ID dell'item (o del body paint) da cui arriva il layer. */
+  itemId?: string;
 }
 
 function slugFromStoreUrl(storeUrl: string): string {
@@ -75,8 +79,12 @@ export function storeIconUrl(storeUrl: string): string {
  * Le immagini che carichiamo sono @2x, quindi: natural@2x / 2 / 186 × 50%
  * = natural@2x / 744 × 100.
  */
-export function layerWidthPercent(natural2xWidth: number, gravestone = false): number {
-  return ((natural2xWidth / 744) * 100) * (gravestone ? GRAVESTONE_SCALE : 1);
+export function layerWidthPercent(
+  natural2xWidth: number,
+  gravestone = false,
+  divisor = 744,
+): number {
+  return ((natural2xWidth / divisor) * 100) * (gravestone ? GRAVESTONE_SCALE : 1);
 }
 
 /**
@@ -92,39 +100,48 @@ export function buildAvatarLayers(
   density: 1 | 2 | 3 = 2,
 ): WovLayerSpec[] {
   const layers: WovLayerSpec[] = [];
-  const push = (key: string, url: string | undefined, z: number) => {
-    if (url) layers.push({ key, url, z });
+
+  const pushItem = (key: string, slotKey: string, z: number) => {
+    const id = slots[slotKey];
+    const url = itemLayerUrlIf(getItemStoreUrl(id), density);
+    if (url) layers.push({ key, url, z, kind: "item", itemId: id ?? undefined });
+  };
+  const pushBody = (key: string, url: string, z: number) => {
+    layers.push({ key, url, z, kind: "body", itemId: slots.bodyPaintId ?? undefined });
   };
 
   const bpStore = getBodyPaintStoreUrl(slots.bodyPaintId);
   const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, density) : null;
 
-  push("back", itemLayerUrlIf(getItemStoreUrl(slots.backId), density), 1);
-  push("back2", itemLayerUrlIf(getItemStoreUrl(slots.backId2), density), 2);
-  if (bpUrls) push("body", bpUrls.body, 3);
-  push("legs", itemLayerUrlIf(getItemStoreUrl(slots.legsId), density), 4);
-  push("legs2", itemLayerUrlIf(getItemStoreUrl(slots.legsId2), density), 5);
-  push("shirt", itemLayerUrlIf(getItemStoreUrl(slots.shirtId), density), 6);
-  push("shirt2", itemLayerUrlIf(getItemStoreUrl(slots.shirtId2), density), 7);
-  push("badge", itemLayerUrlIf(getItemStoreUrl(slots.badgeId), density), 6);
-  push("badge2", itemLayerUrlIf(getItemStoreUrl(slots.badgeId2), density), 7);
-  if (bpUrls) push("head", bpUrls.head, 8);
+  pushItem("back", "backId", 1);
+  pushItem("back2", "backId2", 2);
+  if (bpUrls) pushBody("body", bpUrls.body, 3);
+  pushItem("legs", "legsId", 4);
+  pushItem("legs2", "legsId2", 5);
+  pushItem("shirt", "shirtId", 6);
+  pushItem("shirt2", "shirtId2", 7);
+  pushItem("badge", "badgeId", 6);
+  pushItem("badge2", "badgeId2", 7);
+  if (bpUrls) pushBody("head", bpUrls.head, 8);
+
+  // La bocca del body paint vale solo se non indossi un item bocca.
   const mouthUrl = itemLayerUrlIf(getItemStoreUrl(slots.mouthId), density);
-  if (mouthUrl) push("mouth", mouthUrl, 9);
-  else if (bpUrls) push("mouth", bpUrls.mouth, 9);
-  push("mouth2", itemLayerUrlIf(getItemStoreUrl(slots.mouthId2), density), 10);
-  push("eyes", itemLayerUrlIf(getItemStoreUrl(slots.eyesId), density), 11);
-  push("eyes2", itemLayerUrlIf(getItemStoreUrl(slots.eyesId2), density), 12);
-  push("hair", itemLayerUrlIf(getItemStoreUrl(slots.hairId), density), 13);
-  push("hair2", itemLayerUrlIf(getItemStoreUrl(slots.hairId2), density), 14);
-  push("mask", itemLayerUrlIf(getItemStoreUrl(slots.maskId), density), 15);
-  push("mask2", itemLayerUrlIf(getItemStoreUrl(slots.maskId2), density), 16);
-  push("glasses", itemLayerUrlIf(getItemStoreUrl(slots.glassesId), density), 17);
-  push("glasses2", itemLayerUrlIf(getItemStoreUrl(slots.glassesId2), density), 18);
-  push("hat", itemLayerUrlIf(getItemStoreUrl(slots.hatId), density), 19);
-  push("hat2", itemLayerUrlIf(getItemStoreUrl(slots.hatId2), density), 20);
-  push("front", itemLayerUrlIf(getItemStoreUrl(slots.frontId), density), 21);
-  push("front2", itemLayerUrlIf(getItemStoreUrl(slots.frontId2), density), 22);
+  if (mouthUrl) pushItem("mouth", "mouthId", 9);
+  else if (bpUrls) pushBody("mouth", bpUrls.mouth, 9);
+
+  pushItem("mouth2", "mouthId2", 10);
+  pushItem("eyes", "eyesId", 11);
+  pushItem("eyes2", "eyesId2", 12);
+  pushItem("hair", "hairId", 13);
+  pushItem("hair2", "hairId2", 14);
+  pushItem("mask", "maskId", 15);
+  pushItem("mask2", "maskId2", 16);
+  pushItem("glasses", "glassesId", 17);
+  pushItem("glasses2", "glassesId2", 18);
+  pushItem("hat", "hatId", 19);
+  pushItem("hat2", "hatId2", 20);
+  pushItem("front", "frontId", 21);
+  pushItem("front2", "frontId2", 22);
 
   return layers;
 }

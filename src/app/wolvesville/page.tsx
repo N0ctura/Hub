@@ -13,6 +13,7 @@ import {
   Search,
   Settings,
   Shuffle,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import {
   fetchBodyPaints,
   fetchItemTags,
   fetchSkinPacks,
+  createSharedAvatar,
   getApiKey,
   type WovAvatarItem,
   type WovAvatarSlots,
@@ -34,14 +36,21 @@ import {
   type WovItemType,
   type WovSkinPack,
 } from "@/lib/wov-api";
+import { buildAvatarLayers, storeIconUrl, type WovLayerSpec } from "@/lib/wov-avatar";
 import {
-  AVATAR_BOX_BASE_WIDTH_PCT,
-  AVATAR_BOX_RATIO,
-  buildAvatarLayers,
-  layerWidthPercent,
-  storeIconUrl,
-  type WovLayerSpec,
-} from "@/lib/wov-avatar";
+  DEFAULT_CALIBRATION,
+  layerWidthFraction,
+  loadCalibration,
+  resolveAdjust,
+  saveCalibration,
+  type AvatarCalibration,
+} from "@/lib/avatar-calibration";
+import { AvatarRenderError, renderAvatarBlob, type Density } from "@/lib/avatar-render";
+import { downloadBlob, isAppleTouchDevice, shareBlob } from "@/lib/save-image";
+import {
+  DevCalibrationPanel,
+  type NaturalSize,
+} from "@/components/wolvesville/dev-calibration-panel";
 
 interface Category {
   key: string;
@@ -93,6 +102,16 @@ const ITEM_TYPES: WovItemType[] = [
   "LEGS",
   "GRAVESTONE",
 ];
+
+interface SaveSheetState {
+  /** blob locale pronto da salvare (canvas o fetch riuscito) */
+  objectUrl?: string;
+  blob?: Blob;
+  /** immagine remota mostrabile ma non scaricabile (CORS): salvataggio manuale */
+  remoteUrl?: string;
+  fileName: string;
+  note?: string;
+}
 
 function usePersisted<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial);
@@ -156,6 +175,41 @@ export default function WolvesvillePage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // --- calibrazione / menu dev -------------------------------------------
+  const [calibration, setCalibrationState] = useState<AvatarCalibration>(DEFAULT_CALIBRATION);
+  const [devEnabled, setDevEnabled] = useState(process.env.NODE_ENV !== "production");
+  const [devOpen, setDevOpen] = useState(false);
+  const [showGuides, setShowGuides] = useState(true);
+  const [naturals, setNaturals] = useState<Record<string, NaturalSize>>({});
+  const [downloading, setDownloading] = useState(false);
+  const [saveSheet, setSaveSheet] = useState<SaveSheetState | null>(null);
+
+  const setCalibration = useCallback((next: AvatarCalibration) => {
+    setCalibrationState(next);
+    saveCalibration(next);
+  }, []);
+
+  useEffect(() => {
+    // Calibrazione salvata nel browser (solo chi usa il menu dev ne ha una)
+    setCalibrationState(loadCalibration());
+    // Menu dev: sempre attivo in locale; online si attiva aprendo la pagina con ?dev
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("dev")) window.localStorage.setItem("wov_dev", "1");
+      if (params.get("dev") === "0") window.localStorage.removeItem("wov_dev");
+      if (window.localStorage.getItem("wov_dev") === "1") setDevEnabled(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    // libera l'URL del blob del pannello "salva" quando si chiude
+    return () => {
+      if (saveSheet?.objectUrl) URL.revokeObjectURL(saveSheet.objectUrl);
+    };
+  }, [saveSheet]);
+
   const visibleCats = CATEGORIES.filter((c) => moonlight || !c.second);
   const activeBg = backgrounds[String(activeAvatar)];
 
@@ -165,6 +219,33 @@ export default function WolvesvillePage() {
     for (const paint of bodyPaints) map[paint.id] = paint;
     return map;
   }, [items, bodyPaints]);
+
+  const layerSets = useMemo(() => {
+    const itemUrl = (id: string | null | undefined) => (id ? itemMap[id]?.imageUrl : undefined);
+    const paintUrl = (id: string | null | undefined) =>
+      id ? bodyPaints.find((p) => p.id === id)?.imageUrl : undefined;
+    const build = (d: Density) => buildAvatarLayers(slots, itemUrl, paintUrl, d);
+    return { 1: build(1), 2: build(2), 3: build(3) } as Record<Density, WovLayerSpec[]>;
+  }, [slots, itemMap, bodyPaints]);
+
+  const layers = layerSets[2];
+
+  const handleNatural = useCallback((key: string, w: number, h: number, density: number) => {
+    setNaturals((prev) => {
+      const old = prev[key];
+      if (old && old.w === w && old.h === h && old.density === density) return prev;
+      return { ...prev, [key]: { w, h, density } };
+    });
+  }, []);
+
+  const describeItem = useCallback(
+    (id?: string) => {
+      if (!id) return undefined;
+      const item = itemMap[id];
+      return item ? (item as unknown as Record<string, unknown>) : undefined;
+    },
+    [itemMap],
+  );
 
   const loadAll = useCallback(async (force = false) => {
     setLoadingData(true);
@@ -328,42 +409,77 @@ export default function WolvesvillePage() {
   };
 
   const downloadPng = async () => {
-    const node = previewRef.current;
-    if (!node) return;
+    if (downloading) return;
+    const density: Density = 3;
+    const fileName = `wolvesville-avatar-${density}x-${Date.now()}.png`;
 
-    const scale = 3;
-    try {
-      const shared = await import("@/lib/wov-api").then((m) =>
-        m.createSharedAvatar(slots),
-      );
+    if (layerSets[density].length === 0) {
+      toast.error("Nessun layer da scaricare: scegli almeno un item o un body paint");
+      return;
+    }
 
-      const url = shared.avatar.url.replace(".png", `@${scale}x.png`);
-      const fileName = `wolvesville-avatar-${scale}x-${Date.now()}.png`;
+    setDownloading(true);
+    const loadingId = toast.loading("Preparo l'immagine 3x...");
 
-      try {
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      } catch {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        link.rel = "noreferrer";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // Consegna del file: su iPhone/iPad serve un gesto utente fresco -> pannello "Salva"
+    const deliver = (blob: Blob, w?: number, h?: number) => {
+      if (isAppleTouchDevice()) {
+        setSaveSheet({
+          objectUrl: URL.createObjectURL(blob),
+          blob,
+          fileName,
+          note: w && h ? `${w}×${h}px` : undefined,
+        });
+        toast.success("Immagine pronta: tocca Salva", { id: loadingId });
+      } else {
+        downloadBlob(blob, fileName);
+        toast.success(`Avatar ${density}x scaricato`, { id: loadingId });
       }
+    };
 
-      toast.success(`Avatar ${scale}x scaricato`);
-    } catch {
-      toast.error("Download non riuscito");
+    try {
+      // 1) Strada principale: composizione locale sul canvas (nessuna API, stessa calibrazione dell'anteprima)
+      const result = await renderAvatarBlob({ layerSets, calibration, density });
+      deliver(result.blob, result.width, result.height);
+      if (result.skipped.length) {
+        toast.warning(`${result.skipped.length} layer non caricati, saltati`);
+      }
+      return;
+    } catch (renderError) {
+      const detail =
+        renderError instanceof AvatarRenderError
+          ? renderError.message
+          : renderError instanceof Error
+            ? renderError.message
+            : String(renderError);
+      console.warn("[download] canvas non riuscito, provo l'API ufficiale:", renderError);
+
+      // 2) Fallback: PNG renderizzato da Wolvesville (richiede API key)
+      try {
+        const shared = await createSharedAvatar(slots);
+        const url = shared.avatar.url.replace(/\.png(\?.*)?$/i, `@${density}x.png$1`);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          deliver(await res.blob());
+        } catch {
+          // CORS bloccato: l'<img> si puo' comunque mostrare -> salvataggio manuale
+          setSaveSheet({ remoteUrl: url, fileName, note: "tieni premuto sull'immagine" });
+          toast.message("Download diretto bloccato dal browser: salva dal pannello", {
+            id: loadingId,
+          });
+        }
+        return;
+      } catch (apiError) {
+        const apiDetail = apiError instanceof Error ? apiError.message : String(apiError);
+        console.error("[download] fallito anche con l'API:", apiError);
+        toast.error(`Download non riuscito. Canvas: ${detail}. API: ${apiDetail}`, {
+          id: loadingId,
+          duration: 12000,
+        });
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -396,10 +512,11 @@ export default function WolvesvillePage() {
             )}
 
             <AvatarPreview
-              slots={slots}
-              itemMap={itemMap}
-              bodyPaints={bodyPaints}
+              layers={layers}
+              calibration={calibration}
               scale={avatarScale}
+              showGuides={devOpen && showGuides}
+              onNatural={handleNatural}
             />
 
             {!hideUi && (
@@ -414,6 +531,11 @@ export default function WolvesvillePage() {
                 <ToolbarButton label="Impostazioni" onClick={() => setSettingsOpen((v) => !v)}>
                   <Settings size={22} />
                 </ToolbarButton>
+                {devEnabled && (
+                  <ToolbarButton label="Calibrazione DEV" onClick={() => setDevOpen((v) => !v)}>
+                    <SlidersHorizontal size={22} className={devOpen ? "text-[var(--wov-accent)]" : ""} />
+                  </ToolbarButton>
+                )}
               </div>
             )}
 
@@ -493,9 +615,10 @@ export default function WolvesvillePage() {
             <div className="flex items-center justify-center gap-2">
               <button
                 onClick={() => void downloadPng()}
-                className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125"
+                disabled={downloading}
+                className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125 disabled:opacity-60"
               >
-                <Download size={14} />
+                <Download size={14} className={downloading ? "animate-pulse" : ""} />
                 3x
               </button>
 
@@ -523,7 +646,7 @@ export default function WolvesvillePage() {
             </div>
 
             <p className="mt-1.5 text-center text-[10px] text-[var(--wov-muted)]">
-              3x qualità massima. Avatar generato da Wolvesville · download PNG diretto.
+              3x qualità massima · PNG trasparente composto direttamente nel browser.
             </p>
 
             <input
@@ -886,69 +1009,173 @@ export default function WolvesvillePage() {
           )}
         </div>
       </div>
+
+      {devEnabled && devOpen && (
+        <DevCalibrationPanel
+          calibration={calibration}
+          onChange={setCalibration}
+          onClose={() => setDevOpen(false)}
+          layers={layers}
+          naturals={naturals}
+          describeItem={describeItem}
+          showGuides={showGuides}
+          onShowGuides={setShowGuides}
+        />
+      )}
+
+      {saveSheet && <SaveSheet sheet={saveSheet} onClose={() => setSaveSheet(null)} />}
     </div>
   );
 }
 
 function AvatarPreview({
-  slots,
-  itemMap,
-  bodyPaints,
+  layers,
+  calibration,
   scale = 100,
+  showGuides = false,
+  onNatural,
 }: {
-  slots: WovAvatarSlots;
-  itemMap: Record<string, AnyItem>;
-  bodyPaints: WovBodyPaint[];
+  layers: WovLayerSpec[];
+  calibration: AvatarCalibration;
   scale?: number;
+  showGuides?: boolean;
+  onNatural?: (key: string, w: number, h: number, density: number) => void;
 }) {
-  const layers = useMemo(
-    () =>
-      buildAvatarLayers(
-        slots,
-        (id) => (id ? itemMap[id]?.imageUrl : undefined),
-        (id) => (id ? bodyPaints.find((p) => p.id === id)?.imageUrl : undefined),
-      ),
-    [slots, itemMap, bodyPaints],
-  );
-
-  const widthPct = (AVATAR_BOX_BASE_WIDTH_PCT * scale) / 100;
+  const { box } = calibration;
+  const widthPct = (box.widthPct * scale) / 100;
 
   return (
     <div className="absolute inset-0 z-10 pointer-events-none">
       <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2"
-        style={{ width: `${widthPct}%`, aspectRatio: AVATAR_BOX_RATIO }}
+        className="absolute -translate-x-1/2"
+        style={{
+          width: `${widthPct}%`,
+          aspectRatio: `${box.ratioW} / ${box.ratioH}`,
+          left: `${50 + box.offsetX}%`,
+          bottom: `${box.offsetY}%`,
+          outline: showGuides ? "1px dashed rgba(255,62,127,0.9)" : undefined,
+        }}
       >
         {layers.map((layer) => (
-          <WovLayer key={layer.key} spec={layer} />
+          <WovLayer key={layer.key} spec={layer} calibration={calibration} onNatural={onNatural} />
         ))}
+
+        {showGuides && (
+          <>
+            {/* asse verticale centrale e linea di base */}
+            <div className="absolute inset-y-0 left-1/2 w-px bg-[rgba(255,62,127,0.55)]" style={{ zIndex: 50 }} />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-[rgba(255,62,127,0.9)]" style={{ zIndex: 50 }} />
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function WovLayer({ spec }: { spec: WovLayerSpec }) {
-  const [widthPct, setWidthPct] = useState<number | null>(null);
+function WovLayer({
+  spec,
+  calibration,
+  onNatural,
+}: {
+  spec: WovLayerSpec;
+  calibration: AvatarCalibration;
+  onNatural?: (key: string, w: number, h: number, density: number) => void;
+}) {
+  // Le anteprime caricano sempre @2x
+  const density = 2;
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+
+  const adj = resolveAdjust(calibration, spec);
+  const frac = natural ? layerWidthFraction(natural.w, density, calibration) * adj.scale : 0.08;
+  // dy e' in % della LARGHEZZA del quadrato, ma CSS `bottom` usa l'altezza: si converte.
+  const bottomPct = (adj.dy * calibration.box.ratioW) / calibration.box.ratioH;
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={spec.url}
       alt=""
       draggable={false}
-      onLoad={(event) =>
-        setWidthPct(layerWidthPercent(event.currentTarget.naturalWidth))
-      }
+      onLoad={(event) => {
+        const w = event.currentTarget.naturalWidth;
+        const h = event.currentTarget.naturalHeight;
+        setNatural({ w, h });
+        onNatural?.(spec.key, w, h, density);
+      }}
       style={{
         position: "absolute",
-        bottom: 0,
-        left: "50%",
+        bottom: `${bottomPct}%`,
+        left: `${50 + adj.dx}%`,
         transform: "translateX(-50%)",
-        width: widthPct !== null ? `${widthPct}%` : "8%",
+        width: `${frac * 100}%`,
         height: "auto",
         zIndex: spec.z,
-        opacity: widthPct !== null ? 1 : 0,
+        opacity: natural ? 1 : 0,
       }}
     />
+  );
+}
+
+function SaveSheet({ sheet, onClose }: { sheet: SaveSheetState; onClose: () => void }) {
+  const src = sheet.objectUrl ?? sheet.remoteUrl ?? "";
+
+  const onSave = async () => {
+    if (!sheet.blob) return;
+    // Gesto utente fresco: qui il foglio di condivisione di iOS funziona ("Salva immagine")
+    const result = await shareBlob(sheet.blob, sheet.fileName);
+    if (result === "unsupported") {
+      downloadBlob(sheet.blob, sheet.fileName);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Salva immagine"
+    >
+      <div
+        className="flex max-h-full w-full max-w-sm flex-col gap-3 rounded-lg bg-[var(--wov-panel)] p-3 text-[var(--wov-text)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider">Salva immagine</span>
+          <button aria-label="Chiudi" onClick={onClose} className="text-[var(--wov-muted)]">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto rounded-md bg-[var(--wov-sky)] p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="Avatar pronto" className="mx-auto max-h-[55vh] w-auto object-contain" />
+        </div>
+
+        {sheet.blob ? (
+          <button
+            onClick={() => void onSave()}
+            className="flex items-center justify-center gap-2 rounded-md bg-[var(--wov-accent)] py-2.5 text-sm font-bold text-white"
+          >
+            <Download size={16} /> Salva / Condividi
+          </button>
+        ) : (
+          <a
+            href={sheet.remoteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 rounded-md bg-[var(--wov-accent)] py-2.5 text-sm font-bold text-white"
+          >
+            Apri immagine
+          </a>
+        )}
+
+        <p className="text-center text-[10px] text-[var(--wov-muted)]">
+          {sheet.note ? `${sheet.note} · ` : ""}Su iPhone/iPad puoi anche tenere premuto
+          sull&apos;immagine e scegliere «Salva in Foto».
+        </p>
+      </div>
+    </div>
   );
 }
 

@@ -39,6 +39,8 @@ jobs:
           WOV_API_KEY: ${{ secrets.WOLVESVILLE_API_KEY }}
       - name: Build with Next.js
         run: npm run build
+        env:
+          NEXT_PUBLIC_WOV_API_KEY: ${{ secrets.WOLVESVILLE_API_KEY }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

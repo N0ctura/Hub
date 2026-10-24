@@ -3,36 +3,20 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import re
 import sys
 import tempfile
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "public" / "wov-catalog.json"
 API_BASE = "https://api.wolvesville.com"
-CDN_BASE = "https://cdn2.wolvesville.com"
-ASSET_WORKERS = 32
-ASSET_BATCH_SIZE = 512
-IMAGE_KEYS = (
-    "previewImageUrl",
-    "previewUrl",
-    "imageUrl",
-    "image",
-    "iconUrl",
-    "thumbnailUrl",
-    "avatarImageUrl",
-)
 COLOR_TAGS = (
     "black",
     "blue",
@@ -128,196 +112,6 @@ def build_tag_map(rows: list[dict]) -> dict[str, list[str]]:
     }
 
 
-def store_slug(image_url: str) -> str:
-    filename = urlparse(image_url).path.rsplit("/", 1)[-1]
-    slug, count = re.subn(r"\.store(?:@\dx)?\.png$", "", filename, flags=re.IGNORECASE)
-    if count != 1:
-        raise RuntimeError(f"Unrecognized Wolvesville store image URL: {image_url}")
-    return slug
-
-
-def cdn_url(path: str) -> str:
-    return f"{CDN_BASE}/{path.lstrip('/')}"
-
-
-def add_asset_plan(
-    plans: dict[str, dict],
-    key_url: str,
-    candidates: list[tuple[str, int]],
-    required: bool = True,
-) -> None:
-    parsed = urlparse(key_url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        return
-    if parsed.hostname != "wolvesville.com" and not parsed.hostname.endswith(
-        ".wolvesville.com"
-    ):
-        return
-    if key_url not in plans:
-        plans[key_url] = {
-            "candidates": candidates,
-            "required": required,
-        }
-    elif required:
-        plans[key_url]["required"] = True
-
-
-def build_asset_plans(
-    items: list[dict],
-    body_paints: list[dict],
-    packs: dict[str, list[dict]],
-) -> dict[str, dict]:
-    plans: dict[str, dict] = {}
-
-    for item in items:
-        image_url = item.get("imageUrl")
-        if not isinstance(image_url, str):
-            raise RuntimeError(f"Avatar item {item.get('id', '(unknown)')} has no image URL.")
-        slug = store_slug(image_url)
-        store_url = cdn_url(f"avatarItems/{slug}.store@2x.png")
-        layer_url = cdn_url(f"avatarItems/{slug}.avatar-large@2x.png")
-        add_asset_plan(
-            plans,
-            store_url,
-            [(store_url, 2), (image_url, 1)],
-        )
-        add_asset_plan(
-            plans,
-            layer_url,
-            [
-                (layer_url, 2),
-                (cdn_url(f"avatarItems/{slug}.avatar-large.png"), 1),
-            ],
-        )
-
-    for paint in body_paints:
-        image_url = paint.get("imageUrl")
-        if not isinstance(image_url, str):
-            raise RuntimeError(f"Body paint {paint.get('id', '(unknown)')} has no image URL.")
-        slug = store_slug(image_url)
-        store_url = cdn_url(f"bodyPaints/{slug}.store@2x.png")
-        add_asset_plan(plans, store_url, [(store_url, 2), (image_url, 1)])
-        for part in ("body", "head", "mouth"):
-            layer_url = cdn_url(f"bodyPaints/{part}-{slug}.avatar-large@3x.png")
-            add_asset_plan(
-                plans,
-                layer_url,
-                [
-                    (layer_url, 3),
-                    (cdn_url(f"bodyPaints/{part}-{slug}.avatar-large@2x.png"), 2),
-                    (cdn_url(f"bodyPaints/{part}-{slug}.avatar-large.png"), 1),
-                ],
-            )
-
-    for rows in packs.values():
-        for pack in rows:
-            for key in IMAGE_KEYS:
-                image_url = pack.get(key)
-                if isinstance(image_url, str) and image_url.startswith(("https://", "http://")):
-                    add_asset_plan(plans, image_url, [(image_url, 1)], required=False)
-                    break
-
-    return plans
-
-
-def fetch_image(url: str) -> tuple[str, str] | None:
-    request = Request(
-        url,
-        headers={
-            "Accept": "image/*",
-            "User-Agent": "CelestialHubCatalogUpdater/1.0",
-        },
-    )
-    for attempt in range(4):
-        try:
-            with urlopen(request, timeout=45) as response:
-                mime_type = response.headers.get_content_type()
-                if not mime_type.startswith("image/"):
-                    raise RuntimeError(
-                        f"Expected an image from {url}, got {mime_type}."
-                    )
-                data = response.read(25 * 1024 * 1024 + 1)
-                if len(data) > 25 * 1024 * 1024:
-                    raise RuntimeError(f"Image exceeds the 25 MiB safety limit: {url}")
-                return mime_type, base64.b64encode(data).decode("ascii")
-        except HTTPError as error:
-            if error.code in (403, 404):
-                return None
-            if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
-                raise RuntimeError(f"Image download failed ({error.code}): {url}") from error
-        except (URLError, TimeoutError) as error:
-            if attempt == 3:
-                raise RuntimeError(f"Image download failed: {url}") from error
-        time.sleep(2**attempt)
-    return None
-
-
-def fetch_asset_batch(urls: list[str]) -> dict[str, tuple[str, str] | None]:
-    with ThreadPoolExecutor(max_workers=ASSET_WORKERS) as executor:
-        futures = {executor.submit(fetch_image, url): url for url in urls}
-        return {url: future.result() for future, url in futures.items()}
-
-
-def download_assets(
-    plans: dict[str, dict],
-) -> tuple[dict[str, dict[str, str | int]], list[str]]:
-    pending = set(plans)
-    assets: dict[str, dict[str, str | int]] = {}
-    max_candidates = max(
-        (len(plan["candidates"]) for plan in plans.values()),
-        default=0,
-    )
-
-    for candidate_index in range(max_candidates):
-        if not pending:
-            break
-        keys = [
-            key
-            for key in pending
-            if candidate_index < len(plans[key]["candidates"])
-        ]
-        urls = list(
-            dict.fromkeys(plans[key]["candidates"][candidate_index][0] for key in keys)
-        )
-        fetched: dict[str, tuple[str, str] | None] = {}
-        for start in range(0, len(urls), ASSET_BATCH_SIZE):
-            fetched.update(fetch_asset_batch(urls[start : start + ASSET_BATCH_SIZE]))
-
-        for key in keys:
-            candidate_url, density = plans[key]["candidates"][candidate_index]
-            result = fetched[candidate_url]
-            if result is None:
-                continue
-            mime_type, encoded = result
-            assets[key] = {
-                "src": f"data:{mime_type};base64,{encoded}",
-                "density": density,
-            }
-            pending.remove(key)
-
-        print(
-            f"Local images: {len(assets)}/{len(plans)} ready "
-            f"(fallback pass {candidate_index + 1})."
-        )
-
-    missing = sorted(pending)
-    required_missing = [url for url in missing if plans[url]["required"]]
-    optional_missing = len(missing) - len(required_missing)
-    if required_missing:
-        print(
-            f"Required CDN images unavailable after all density fallbacks: "
-            f"{len(required_missing)}. Examples: {', '.join(required_missing[:5])}",
-            file=sys.stderr,
-        )
-    if optional_missing:
-        print(
-            f"Optional preview images unavailable: {optional_missing}.",
-            file=sys.stderr,
-        )
-
-    return assets, missing
-
-
 def write_catalog(catalog: dict) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     temp_name: str | None = None
@@ -379,23 +173,14 @@ def main() -> int:
         "collections": results["collections"],
         "roleCards": results["roleCards"],
     }
-    assets, missing_assets = download_assets(
-        build_asset_plans(
-            results["items"],
-            results["bodyPaints"],
-            packs,
-        )
-    )
     catalog = {
-        "version": 2,
+        "version": 1,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "items": results["items"],
         "bodyPaints": results["bodyPaints"],
         "tags": tags,
         "colorIndex": color_index,
         "packs": packs,
-        "assets": assets,
-        "missingAssets": missing_assets,
     }
     write_catalog(catalog)
 
@@ -404,8 +189,7 @@ def main() -> int:
         f"Catalog written: {len(results['items'])} avatar items, "
         f"{len(results['bodyPaints'])} body paints, {len(tags)} tagged IDs, "
         f"{color_count} color assignments, "
-        f"{sum(len(results[name]) for name in OPTIONAL_ENDPOINTS)} skin packs, "
-        f"{len(assets)} local images."
+        f"{sum(len(results[name]) for name in OPTIONAL_ENDPOINTS)} skin packs."
     )
     print(f"Output: {OUTPUT.relative_to(ROOT)}")
     return 0

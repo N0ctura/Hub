@@ -29,7 +29,6 @@ import {
   type WovAvatarItem,
   type WovAvatarSlots,
   type WovBodyPaint,
-  type WovCatalogAsset,
   type WovItemType,
   type WovSkinPack,
 } from "@/lib/wov-api";
@@ -159,23 +158,6 @@ function itemRarity(item: AnyItem) {
   return item.rarity ?? "COMMON";
 }
 
-function localizeLayer(
-  layer: WovLayerSpec,
-  assets: Record<string, WovCatalogAsset>,
-): WovLayerSpec {
-  const variants =
-    layer.kind === "body"
-      ? [3, 2, 1]
-      : [2, 1];
-  for (const density of variants) {
-    const suffix = density === 1 ? "" : `@${density}x`;
-    const url = layer.url.replace(/@(?:1|2|3)x(?=\.png(?:[?#]|$))/i, suffix);
-    const asset = assets[url];
-    if (asset) return { ...layer, url: asset.src, density: asset.density };
-  }
-  return { ...layer, url: "data:," };
-}
-
 export default function WolvesvillePage() {
   const [tab, setTab] = useState<"avatar" | "items">("avatar");
   const [cat, setCat] = useState("hat");
@@ -189,7 +171,6 @@ export default function WolvesvillePage() {
   const [skinPacks, setSkinPacks] = useState<WovSkinPack[]>([]);
   const [tags, setTags] = useState<Record<string, string[]>>({});
   const [colorIndex, setColorIndex] = useState<Record<string, string[]>>({});
-  const [assets, setAssets] = useState<Record<string, WovCatalogAsset> | null>(null);
   const [slots, setSlots] = useState<WovAvatarSlots>({});
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -264,12 +245,9 @@ export default function WolvesvillePage() {
   );
 
   const layerSets = useMemo(() => {
-    const build = (d: Density) =>
-      buildAvatarLayers(slots, itemUrlOf, paintUrlOf, d).map((layer) =>
-        assets ? localizeLayer(layer, assets) : layer,
-      );
+    const build = (d: Density) => buildAvatarLayers(slots, itemUrlOf, paintUrlOf, d);
     return { 1: build(1), 2: build(2), 3: build(3) } as Record<Density, WovLayerSpec[]>;
-  }, [slots, itemUrlOf, paintUrlOf, assets]);
+  }, [slots, itemUrlOf, paintUrlOf]);
 
   /** Tipo dell'item (HAT, HAIR...) a partire dall'id: serve a smistare gli id "sciolti" dei pacchetti. */
   const typeOfId = useCallback(
@@ -337,7 +315,6 @@ export default function WolvesvillePage() {
       setTags(catalog.tags);
       setColorIndex(catalog.colorIndex);
       setSkinPacks(catalog.skinPacks);
-      setAssets(Object.keys(catalog.assets).length ? catalog.assets : null);
 
       setSlots((prev) => {
         if (prev.bodyPaintId) return prev;
@@ -921,14 +898,12 @@ export default function WolvesvillePage() {
                                   itemUrl={itemUrlOf}
                                   paintUrl={paintUrlOf}
                                   calibration={calibration}
-                                  assets={assets}
                                 />
                               ) : pack.previewImageUrl ? (
                                 <StoreIcon
                                   src={pack.previewImageUrl}
                                   alt={label}
                                   className="h-full w-full object-contain p-1"
-                                  assets={assets}
                                 />
                               ) : (
                                 <div
@@ -1001,7 +976,6 @@ export default function WolvesvillePage() {
                                 src={item.imageUrl}
                                 alt={itemTitle(item)}
                                 className="h-full w-full object-contain"
-                                assets={assets}
                               />
 
                               {selected && (
@@ -1095,7 +1069,6 @@ export default function WolvesvillePage() {
                         src={item.imageUrl}
                         alt={itemTitle(item)}
                         className="h-full w-full object-contain"
-                        assets={assets}
                       />
                     </button>
                   );
@@ -1196,21 +1169,10 @@ function useInView(ref: RefObject<Element | null>): boolean {
  * Icona dello store con rete di sicurezza: prova la versione @2x e, se non esiste
  * (item vecchi), ricade sull'URL originale dell'API. Se anche quello manca, mostra un segnaposto.
  */
-function StoreIcon({
-  src,
-  alt,
-  className,
-  assets,
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-  assets: Record<string, WovCatalogAsset> | null;
-}) {
+function StoreIcon({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const [stage, setStage] = useState<0 | 1 | 2>(0);
-  const localAsset = assets?.[storeIconUrl(src)] ?? assets?.[src];
-  const urls = localAsset ? [localAsset.src] : [storeIconUrl(src), src];
-  if (stage === 2 || (assets && !localAsset)) {
+  const urls = [storeIconUrl(src), src];
+  if (stage === 2) {
     return <span className="text-[9px] text-[var(--wov-muted)]">?</span>;
   }
   return (
@@ -1236,26 +1198,19 @@ function PackThumb({
   itemUrl,
   paintUrl,
   calibration,
-  assets,
 }: {
   slots: WovAvatarSlots;
   itemUrl: (id: string | null | undefined) => string | undefined;
   paintUrl: (id: string | null | undefined) => string | undefined;
   calibration: AvatarCalibration;
-  assets: Record<string, WovCatalogAsset> | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const visible = useInView(ref);
   const layers = useMemo(
-    () =>
-      visible
-        ? buildAvatarLayers(slots, itemUrl, paintUrl, 2, 2).map((layer) =>
-            assets ? localizeLayer(layer, assets) : layer,
-          )
-        : [],
+    () => (visible ? buildAvatarLayers(slots, itemUrl, paintUrl, 2, 2) : []),
     // slots e' un oggetto nuovo a ogni render del genitore: si confronta il contenuto
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible, JSON.stringify(slots), itemUrl, paintUrl, assets],
+    [visible, JSON.stringify(slots), itemUrl, paintUrl],
   );
 
   return (

@@ -34,9 +34,14 @@ export interface WovLayerSpec {
   itemId?: string;
 }
 
+/** Vero se l'URL e' una "store icon" (`<slug>.store.png`, anche `.store@2x.png`). */
+export function isStoreIconUrl(url: string): boolean {
+  return /\.store(@\dx)?\.png/i.test(url);
+}
+
 function slugFromStoreUrl(storeUrl: string): string {
   const file = storeUrl.split("/").pop() ?? "";
-  return file.replace(/\.store\.png.*$/i, "");
+  return file.replace(/\.store(@\dx)?\.png.*$/i, "");
 }
 
 /** URL del layer avatar-large di un item, ricavato dalla store icon. */
@@ -67,8 +72,10 @@ export function bodyPaintLayerUrls(
 
 /** Icona del negozio in alta qualità: versione @2x su cdn2 (come il gioco). */
 export function storeIconUrl(storeUrl: string): string {
-  const file = storeUrl.split("/").pop() ?? "";
-  const slug = file.replace(/\.store\.png.*$/i, "");
+  // Se non e' una store icon (es. preview di un pacchetto skin) NON va riscritta:
+  // prima il filename intero finiva nello "slug" e usciva un URL inesistente (404).
+  if (!isStoreIconUrl(storeUrl)) return storeUrl;
+  const slug = slugFromStoreUrl(storeUrl);
   const dir = storeUrl.includes("/bodyPaints/") ? "bodyPaints" : "avatarItems";
   return `https://cdn2.wolvesville.com/${dir}/${slug}.store@2x.png`;
 }

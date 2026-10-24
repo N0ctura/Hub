@@ -197,11 +197,21 @@ export async function fetchBackgrounds(force = false): Promise<WovBackground[]> 
 export interface WovSkinPack {
   id: string;
   title: string;
+  /** false = l'API non ha dato un nome: `title` e' solo l'id (spesso un UUID). */
+  hasTitle: boolean;
   rarity: WovRarity;
   previewImageUrl?: string;
   source: "SET" | "COLLECTION" | "ROLE_CARD";
+  /** Slot trovati con certezza (chiave piatta o oggetto con id + tipo). */
   slots: WovAvatarSlots;
+  /** Id di item trovati senza tipo: il tipo si ricava dalla lista item (resolvePackSlots). */
+  itemIds: string[];
 }
+
+const KNOWN_TYPES = new Set<string>([
+  "SHIRT", "HAIR", "HAT", "GLASSES", "GRAVESTONE", "FRONT",
+  "BACK", "EYES", "BADGE", "MASK", "MOUTH", "LEGS", "BODY_PAINT",
+]);
 
 function normalizeSetSlots(raw: Record<string, unknown>): WovAvatarSlots {
   const out: WovAvatarSlots = {};
@@ -214,14 +224,119 @@ function normalizeSetSlots(raw: Record<string, unknown>): WovAvatarSlots {
     const nested = raw[def.type.toLowerCase() as string] as
       | { id?: string }
       | undefined;
-    if (nested && typeof nested.id === "string") out[def.key] = nested.id;
+    // Un oggetto annidato (es. `hat: {id}`) vale per UN solo slot: senza questo controllo
+    // finiva anche negli slot "2" (hatId2, hairId2...) duplicando l'item.
+    if (nested && typeof nested.id === "string" && !Object.values(out).includes(nested.id)) {
+      out[def.key] = nested.id;
+    }
   }
   return out;
 }
 
+const TITLE_KEYS = ["title", "name", "displayName", "setName", "localizedName", "label"];
+const IMAGE_KEYS = [
+  "previewImageUrl", "previewUrl", "imageUrl", "image", "iconUrl", "thumbnailUrl", "avatarImageUrl",
+];
+
+function pickString(raw: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = raw[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+function putInFirstFreeSlot(out: WovAvatarSlots, type: string, id: string): void {
+  if (Object.values(out).includes(id)) return;
+  const slot = WOV_SLOTS.find((def) => def.type === type && !out[def.key]);
+  if (slot) out[slot.key] = id;
+}
+
+/**
+ * Estrae gli item di un set/collezione/role card SENZA conoscere lo schema esatto:
+ *  1) chiavi piatte (hatId, shirtId...)            -> normalizeSetSlots
+ *  2) oggetti annidati { id, type } a qualsiasi livello (anche in array)
+ *  3) array di semplici id (tipo ignoto)            -> itemIds, risolti dopo
+ */
+function collectPackContent(raw: Record<string, unknown>): {
+  slots: WovAvatarSlots;
+  itemIds: string[];
+} {
+  const slots = normalizeSetSlots(raw);
+  const loose: string[] = [];
+
+  const walk = (node: unknown, depth: number, key: string): void => {
+    if (node == null || depth > 5) return;
+    if (Array.isArray(node)) {
+      for (const el of node) {
+        if (typeof el === "string") {
+          if (/items?|avatar|ids?$/i.test(key) && el.length <= 40) loose.push(el);
+        } else {
+          walk(el, depth + 1, key);
+        }
+      }
+      return;
+    }
+    if (typeof node !== "object") return;
+    const o = node as Record<string, unknown>;
+    const id = [o.id, o.avatarItemId, o.itemId].find((v) => typeof v === "string") as string | undefined;
+    const rawType = [o.type, o.avatarItemType, o.itemType].find((v) => typeof v === "string") as
+      | string
+      | undefined;
+    const type = rawType?.toUpperCase();
+    if (id && type && KNOWN_TYPES.has(type)) {
+      putInFirstFreeSlot(slots, type, id);
+      return;
+    }
+    for (const [k, v] of Object.entries(o)) walk(v, depth + 1, k);
+  };
+  walk(raw, 0, "");
+
+  return { slots, itemIds: Array.from(new Set(loose)) };
+}
+
+/**
+ * Completa gli slot di un pacchetto usando la lista degli item caricati:
+ * gli id "sciolti" vengono assegnati allo slot giusto in base al loro tipo.
+ */
+export function resolvePackSlots(
+  pack: Pick<WovSkinPack, "slots" | "itemIds">,
+  typeOf: (id: string) => string | undefined,
+): WovAvatarSlots {
+  const out: WovAvatarSlots = { ...pack.slots };
+  for (const id of pack.itemIds) {
+    const type = typeOf(id);
+    if (type) putInFirstFreeSlot(out, type, id);
+  }
+  return out;
+}
+
+function toPack(
+  raw: Record<string, unknown>,
+  source: WovSkinPack["source"],
+  idKeys: string[],
+  defaultRarity: WovRarity,
+): WovSkinPack | null {
+  const id = String(idKeys.map((k) => raw[k]).find((v) => v != null && v !== "") ?? "");
+  if (!id) return null;
+  const title = pickString(raw, TITLE_KEYS);
+  const { slots, itemIds } = collectPackContent(raw);
+  return {
+    id,
+    title: title ?? id,
+    hasTitle: !!title,
+    rarity: (raw.rarity as WovRarity) ?? defaultRarity,
+    previewImageUrl: pickString(raw, IMAGE_KEYS),
+    source,
+    slots,
+    itemIds: itemIds.filter((x) => x !== id),
+  };
+}
+
 export async function fetchSkinPacks(force = false): Promise<WovSkinPack[]> {
+  // chiave "skinPacks2": la forma dei dati e' cambiata, la vecchia cache va ignorata
   if (!force) {
-    const cached = readCache<WovSkinPack[]>("skinPacks");
+    const cached = readCache<WovSkinPack[]>("skinPacks2");
     if (cached) return cached;
   }
   const [sets, collections, roleCards] = await Promise.all([
@@ -237,53 +352,34 @@ export async function fetchSkinPacks(force = false): Promise<WovSkinPack[]> {
   ]);
 
   const out: WovSkinPack[] = [];
-
   for (const s of sets) {
-    const id = String(s.id ?? s.setId ?? "");
-    if (!id) continue;
-    out.push({
-      id,
-      title: String(s.title ?? s.name ?? id),
-      rarity: (s.rarity as WovRarity) ?? "COMMON",
-      previewImageUrl: s.previewImageUrl
-        ? String(s.previewImageUrl)
-        : undefined,
-      source: "SET",
-      slots: normalizeSetSlots(s),
-    });
+    const p = toPack(s, "SET", ["id", "setId"], "COMMON");
+    if (p) out.push(p);
   }
-
   for (const c of collections) {
-    const id = String(c.id ?? c.collectionId ?? "");
-    if (!id) continue;
-    out.push({
-      id,
-      title: String(c.title ?? c.name ?? id),
-      rarity: (c.rarity as WovRarity) ?? "COMMON",
-      previewImageUrl: c.previewImageUrl
-        ? String(c.previewImageUrl)
-        : undefined,
-      source: "COLLECTION",
-      slots: normalizeSetSlots(c),
-    });
+    const p = toPack(c, "COLLECTION", ["id", "collectionId"], "COMMON");
+    if (p) out.push(p);
   }
-
   for (const rc of roleCards) {
-    const id = String(rc.id ?? rc.offerId ?? "");
-    if (!id) continue;
-    out.push({
-      id,
-      title: String(rc.title ?? rc.name ?? id),
-      rarity: (rc.rarity as WovRarity) ?? "LEGENDARY",
-      previewImageUrl: rc.previewImageUrl
-        ? String(rc.previewImageUrl)
-        : undefined,
-      source: "ROLE_CARD",
-      slots: normalizeSetSlots(rc),
-    });
+    const p = toPack(rc, "ROLE_CARD", ["id", "offerId"], "LEGENDARY");
+    if (p) out.push(p);
   }
 
-  writeCache("skinPacks", out);
+  // Aiuto per il debug: se un pacchetto non ha ne' slot ne' id, mostra com'e' fatto davvero.
+  if (typeof window !== "undefined") {
+    const empty = out.filter((p) => !Object.values(p.slots).some(Boolean) && !p.itemIds.length);
+    if (empty.length) {
+      const src = [...sets, ...collections, ...roleCards].find(
+        (r) => String(r.id ?? r.setId ?? r.collectionId ?? r.offerId) === empty[0].id,
+      );
+      console.warn(
+        `[wov] ${empty.length} pacchetti senza item riconoscibili. Esempio di dato grezzo:`,
+        src,
+      );
+    }
+  }
+
+  writeCache("skinPacks2", out);
   return out;
 }
 

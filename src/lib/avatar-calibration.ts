@@ -61,14 +61,19 @@ export const FALLBACK_CALIBRATION: AvatarCalibration = {
   version: 1,
   box: { widthPct: 76, ratioW: 372, ratioH: 430, offsetX: 0, offsetY: 0 },
   baseDivisor: 744,
-  body: { ...NEUTRAL },
+  // Misurato confrontando l'omino del gioco con il nostro: i layer del body paint
+  // risultavano ~1.7x troppo grandi rispetto agli item (testa e spalle: 0.58).
+  body: { scale: 0.58, dx: 0, dy: 0 },
   items: { ...NEUTRAL },
   layers: {},
   overrides: {},
   exportFit: true,
 };
 
-export const CALIBRATION_STORAGE_KEY = "wov_calibration_v1";
+// v2: i valori predefiniti sono cambiati (scala omino 0.58). La chiave nuova evita che una
+// vecchia calibrazione salvata nel browser (omino a 1.0) copra i nuovi default.
+export const CALIBRATION_STORAGE_KEY = "wov_calibration_v2";
+const LEGACY_CALIBRATION_STORAGE_KEY = "wov_calibration_v1";
 
 /* ------------------------------ sanitize -------------------------------- */
 
@@ -154,8 +159,19 @@ export function loadCalibration(): AvatarCalibration {
   if (typeof window === "undefined") return DEFAULT_CALIBRATION;
   try {
     const raw = window.localStorage.getItem(CALIBRATION_STORAGE_KEY);
-    if (!raw) return DEFAULT_CALIBRATION;
-    return sanitizeCalibration(JSON.parse(raw), DEFAULT_CALIBRATION);
+    if (raw) return sanitizeCalibration(JSON.parse(raw), DEFAULT_CALIBRATION);
+
+    // Migrazione dalla v1: si tengono SOLO le regole per slot e per singolo item
+    // (lavoro fatto a mano); box / omino / item globali tornano ai nuovi default.
+    const legacy = window.localStorage.getItem(LEGACY_CALIBRATION_STORAGE_KEY);
+    if (legacy) {
+      const old = JSON.parse(legacy) as Record<string, unknown>;
+      return sanitizeCalibration(
+        { ...DEFAULT_CALIBRATION, layers: old.layers, overrides: old.overrides },
+        DEFAULT_CALIBRATION,
+      );
+    }
+    return DEFAULT_CALIBRATION;
   } catch {
     return DEFAULT_CALIBRATION;
   }

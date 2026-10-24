@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import {
   Download,
@@ -28,6 +28,7 @@ import {
   fetchBodyPaints,
   fetchItemTags,
   fetchSkinPacks,
+  resolvePackSlots,
   createSharedAvatar,
   getApiKey,
   type WovAvatarItem,
@@ -220,13 +221,50 @@ export default function WolvesvillePage() {
     return map;
   }, [items, bodyPaints]);
 
+  // Funzioni stabili (stessa identita' finche' i dati non cambiano): servono anche alle
+  // miniature dei pacchetti, che altrimenti si ricomporrebbero a ogni render.
+  const itemUrlOf = useCallback(
+    (id: string | null | undefined) => (id ? itemMap[id]?.imageUrl : undefined),
+    [itemMap],
+  );
+  const paintUrlOf = useCallback(
+    (id: string | null | undefined) =>
+      id ? bodyPaints.find((p) => p.id === id)?.imageUrl : undefined,
+    [bodyPaints],
+  );
+
   const layerSets = useMemo(() => {
-    const itemUrl = (id: string | null | undefined) => (id ? itemMap[id]?.imageUrl : undefined);
-    const paintUrl = (id: string | null | undefined) =>
-      id ? bodyPaints.find((p) => p.id === id)?.imageUrl : undefined;
-    const build = (d: Density) => buildAvatarLayers(slots, itemUrl, paintUrl, d);
+    const build = (d: Density) => buildAvatarLayers(slots, itemUrlOf, paintUrlOf, d);
     return { 1: build(1), 2: build(2), 3: build(3) } as Record<Density, WovLayerSpec[]>;
-  }, [slots, itemMap, bodyPaints]);
+  }, [slots, itemUrlOf, paintUrlOf]);
+
+  /** Tipo dell'item (HAT, HAIR...) a partire dall'id: serve a smistare gli id "sciolti" dei pacchetti. */
+  const typeOfId = useCallback(
+    (id: string) => {
+      const item = itemMap[id];
+      if (!item) return undefined;
+      const t = (item as { type?: unknown }).type;
+      return typeof t === "string" ? t : "BODY_PAINT";
+    },
+    [itemMap],
+  );
+
+  /** Pacchetti con gli slot gia' risolti (+ nome leggibile se l'API non ne da' uno). */
+  const resolvedPacks = useMemo(
+    () =>
+      skinPacks.map((pack) => {
+        const packSlots = resolvePackSlots(pack, typeOfId);
+        let label = pack.title;
+        if (!pack.hasTitle) {
+          const firstNamed = Object.values(packSlots)
+            .map((id) => (id ? itemMap[id]?.title : undefined))
+            .find((t): t is string => typeof t === "string" && t.trim().length > 0);
+          label = firstNamed ?? `Skin ${pack.id.slice(0, 6)}`;
+        }
+        return { pack, packSlots, label };
+      }),
+    [skinPacks, typeOfId, itemMap],
+  );
 
   const layers = layerSets[2];
 
@@ -313,25 +351,37 @@ export default function WolvesvillePage() {
     );
   }, [activeCategory, bodyPaints, items, search, tags]);
 
-  const categorySkinPacks = useMemo<WovSkinPack[]>(() => {
+  const categorySkinPacks = useMemo(() => {
     if (!activeCategory.isSkinPack) return [];
     const q = search.trim().toLowerCase();
-    const base = skinPacks.filter((p) => {
+    const base = resolvedPacks.filter(({ pack, label }) => {
       if (!q) return true;
       return (
-        p.title.toLowerCase().includes(q) ||
-        p.id.toLowerCase().includes(q) ||
-        p.source.toLowerCase().includes(q)
+        label.toLowerCase().includes(q) ||
+        pack.id.toLowerCase().includes(q) ||
+        pack.source.toLowerCase().includes(q)
       );
     });
     return [...base].sort((a, b) =>
-      a.title.localeCompare(b.title, undefined, { sensitivity: "base" })
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
     );
-  }, [activeCategory, search, skinPacks]);
+  }, [activeCategory, search, resolvedPacks]);
 
-  const equipSkinPack = (pack: WovSkinPack) => {
-    setSlots((prev) => ({ ...prev, ...pack.slots }));
-    toast.success(`Equipaggiato ${pack.title}`);
+  const equipSkinPack = (pack: WovSkinPack, packSlots: WovAvatarSlots, label: string) => {
+    if (!Object.values(packSlots).some(Boolean)) {
+      toast.error(`"${label}": nessun item riconosciuto in questo pacchetto`);
+      return;
+    }
+    // Una skin completa SOSTITUISCE tutto l'abbigliamento (come nel gioco); il body paint
+    // attuale resta se il pacchetto non ne porta uno suo.
+    setSlots((prev) => {
+      const next: WovAvatarSlots = {};
+      for (const def of WOV_SLOTS) next[def.key] = null;
+      next.bodyPaintId = prev.bodyPaintId ?? null;
+      for (const [key, id] of Object.entries(packSlots)) if (id) next[key] = id;
+      return next;
+    });
+    toast.success(`Equipaggiato ${label}`);
   };
 
   const catalogItems = useMemo(() => {
@@ -817,25 +867,31 @@ export default function WolvesvillePage() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                        {categorySkinPacks.map((pack) => {
+                        {categorySkinPacks.map(({ pack, packSlots, label }) => {
                           const meta = RARITY_META[pack.rarity];
                           const bgClass = meta.dot;
+                          const hasLayers = Object.values(packSlots).some(Boolean);
 
                           return (
                             <button
-                              key={pack.id}
+                              key={`${pack.source}-${pack.id}`}
                               type="button"
-                              onClick={() => equipSkinPack(pack)}
-                              className={`group flex aspect-[86/68] flex-col items-center justify-center overflow-hidden rounded-lg border-2 bg-[var(--wov-tile)] p-1 transition-all hover:brightness-125 ${meta.border}`}
-                              title={`${pack.title} · ${pack.source}`}
+                              onClick={() => equipSkinPack(pack, packSlots, label)}
+                              className={`group relative flex aspect-[86/68] flex-col items-center justify-center overflow-hidden rounded-lg border-2 bg-[var(--wov-tile)] transition-all hover:brightness-125 ${meta.border}`}
+                              title={`${label} · ${pack.source}`}
                             >
-                              {pack.previewImageUrl ? (
-                                <img
-                                  src={storeIconUrl(pack.previewImageUrl)}
-                                  alt={pack.title}
-                                  loading="lazy"
-                                  draggable={false}
-                                  className="h-full w-full object-contain"
+                              {hasLayers ? (
+                                <PackThumb
+                                  slots={{ bodyPaintId: slots.bodyPaintId ?? null, ...packSlots }}
+                                  itemUrl={itemUrlOf}
+                                  paintUrl={paintUrlOf}
+                                  calibration={calibration}
+                                />
+                              ) : pack.previewImageUrl ? (
+                                <StoreIcon
+                                  src={pack.previewImageUrl}
+                                  alt={label}
+                                  className="h-full w-full object-contain p-1"
                                 />
                               ) : (
                                 <div
@@ -844,7 +900,7 @@ export default function WolvesvillePage() {
                                   <span
                                     className={`line-clamp-2 w-full text-[9px] font-bold leading-tight ${meta.text}`}
                                   >
-                                    {pack.title}
+                                    {label}
                                   </span>
                                   <span className="text-[7px] uppercase tracking-wide opacity-70 text-white/90">
                                     {meta.label} · {pack.source}
@@ -904,11 +960,9 @@ export default function WolvesvillePage() {
                               }`}
                               title={itemTitle(item)}
                             >
-                              <img
-                                src={storeIconUrl(item.imageUrl)}
+                              <StoreIcon
+                                src={item.imageUrl}
                                 alt={itemTitle(item)}
-                                loading="lazy"
-                                draggable={false}
                                 className="h-full w-full object-contain"
                               />
 
@@ -994,11 +1048,9 @@ export default function WolvesvillePage() {
                       title={`${itemTitle(item)} · ${item.id}`}
                       className={`relative flex aspect-[86/68] items-center justify-center rounded-lg border-2 bg-[var(--wov-tile)] p-1.5 hover:brightness-125 ${meta.border}`}
                     >
-                      <img
-                        src={storeIconUrl(item.imageUrl)}
+                      <StoreIcon
+                        src={item.imageUrl}
                         alt={itemTitle(item)}
-                        loading="lazy"
-                        draggable={false}
                         className="h-full w-full object-contain"
                       />
                     </button>
@@ -1024,6 +1076,90 @@ export default function WolvesvillePage() {
       )}
 
       {saveSheet && <SaveSheet sheet={saveSheet} onClose={() => setSaveSheet(null)} />}
+    </div>
+  );
+}
+
+/** True appena l'elemento entra (quasi) nello schermo: evita di montare migliaia di <img> in anticipo. */
+function useInView(ref: RefObject<Element | null>): boolean {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setSeen(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, seen]);
+  return seen;
+}
+
+/**
+ * Icona dello store con rete di sicurezza: prova la versione @2x e, se non esiste
+ * (item vecchi), ricade sull'URL originale dell'API. Se anche quello manca, mostra un segnaposto.
+ */
+function StoreIcon({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
+  const urls = [storeIconUrl(src), src];
+  if (stage === 2) {
+    return <span className="text-[9px] text-[var(--wov-muted)]">?</span>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={urls[stage]}
+      alt={alt}
+      loading="lazy"
+      draggable={false}
+      className={className}
+      onError={() => setStage((s) => (s === 0 && urls[1] !== urls[0] ? 1 : 2))}
+    />
+  );
+}
+
+/** Zoom della miniatura di un pacchetto: mostra testa e spalle come nel gioco. */
+const PACK_THUMB_ZOOM = 1.5;
+
+/** Miniatura di un pacchetto skin: l'avatar composto con lo STESSO motore dell'anteprima grande. */
+function PackThumb({
+  slots,
+  itemUrl,
+  paintUrl,
+  calibration,
+}: {
+  slots: WovAvatarSlots;
+  itemUrl: (id: string | null | undefined) => string | undefined;
+  paintUrl: (id: string | null | undefined) => string | undefined;
+  calibration: AvatarCalibration;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const visible = useInView(ref);
+  const layers = useMemo(
+    () => (visible ? buildAvatarLayers(slots, itemUrl, paintUrl, 2) : []),
+    // slots e' un oggetto nuovo a ogni render del genitore: si confronta il contenuto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, JSON.stringify(slots), itemUrl, paintUrl],
+  );
+
+  return (
+    <div ref={ref} className="absolute inset-0 overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{ transform: `scale(${PACK_THUMB_ZOOM})`, transformOrigin: "50% 100%" }}
+      >
+        <AvatarPreview layers={layers} calibration={calibration} />
+      </div>
     </div>
   );
 }

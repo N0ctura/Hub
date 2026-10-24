@@ -117,7 +117,7 @@ async function loadLayers(
         if (!candidate || candidate.key !== spec.key) continue;
         try {
           const img = await loadImageCors(candidate.url);
-          return { spec: candidate, img, density: d };
+          return { spec: candidate, img, density: (candidate.density ?? d) as Density };
         } catch {
           /* prova la densita' successiva */
         }

@@ -1217,8 +1217,8 @@ function WovLayer({
   calibration: AvatarCalibration;
   onNatural?: (key: string, w: number, h: number, density: number) => void;
 }) {
-  // Le anteprime caricano sempre @2x
-  const density = 2;
+  // Item @2x; le parti del body paint @3x (vedi BODY_PAINT_DENSITY in wov-avatar.ts)
+  const density = spec.density ?? 2;
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
 
   const adj = resolveAdjust(calibration, spec);

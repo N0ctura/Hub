@@ -32,7 +32,15 @@ export interface WovLayerSpec {
   kind: "body" | "item";
   /** ID dell'item (o del body paint) da cui arriva il layer. */
   itemId?: string;
+  /**
+   * Densita' reale dell'immagine in `url` (default 2). I body paint usano sempre @3x,
+   * come il client ufficiale: la larghezza va calcolata con la densita' VERA del file.
+   */
+  density?: 1 | 2 | 3;
 }
+
+/** Densita' con cui il client ufficiale carica le parti del body paint (misurato). */
+export const BODY_PAINT_DENSITY = 3;
 
 /** Vero se l'URL e' una "store icon" (`<slug>.store.png`, anche `.store@2x.png`). */
 export function isStoreIconUrl(url: string): boolean {
@@ -114,11 +122,20 @@ export function buildAvatarLayers(
     if (url) layers.push({ key, url, z, kind: "item", itemId: id ?? undefined });
   };
   const pushBody = (key: string, url: string, z: number) => {
-    layers.push({ key, url, z, kind: "body", itemId: slots.bodyPaintId ?? undefined });
+    layers.push({
+      key,
+      url,
+      z,
+      kind: "body",
+      itemId: slots.bodyPaintId ?? undefined,
+      density: BODY_PAINT_DENSITY,
+    });
   };
 
+  // Il gioco carica body/head/mouth a @3x (gli item a @2x). Prendere @2x dava un omino
+  // ~1.7x troppo grande rispetto agli item.
   const bpStore = getBodyPaintStoreUrl(slots.bodyPaintId);
-  const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, density) : null;
+  const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, BODY_PAINT_DENSITY) : null;
 
   pushItem("back", "backId", 1);
   pushItem("back2", "backId2", 2);

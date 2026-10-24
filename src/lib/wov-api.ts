@@ -70,6 +70,12 @@ export interface WovCatalogFile {
     collections: Record<string, unknown>[];
     roleCards: Record<string, unknown>[];
   };
+  assets?: Record<string, WovCatalogAsset>;
+}
+
+export interface WovCatalogAsset {
+  src: string;
+  density: 1 | 2 | 3;
 }
 
 export interface WovCatalogData {
@@ -78,6 +84,7 @@ export interface WovCatalogData {
   tags: Record<string, string[]>;
   colorIndex: Record<string, string[]>;
   skinPacks: WovSkinPack[];
+  assets: Record<string, WovCatalogAsset>;
 }
 
 const KNOWN_TYPES = new Set<string>([
@@ -268,6 +275,12 @@ export async function fetchWovCatalog(
       catalog.packs.collections,
       catalog.packs.roleCards,
     ),
+    assets:
+      catalog.assets &&
+      typeof catalog.assets === "object" &&
+      !Array.isArray(catalog.assets)
+        ? catalog.assets
+        : {},
   };
 }
 

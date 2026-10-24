@@ -52,11 +52,18 @@ function slugFromStoreUrl(storeUrl: string): string {
   return file.replace(/\.store(@\dx)?\.png.*$/i, "");
 }
 
+function avatarLayerUrl(path: string): string {
+  if (process.env.NODE_ENV === "development") {
+    return `/__wov-cdn/${path}`;
+  }
+  return `https://cdn2.wolvesville.com/${path}`;
+}
+
 /** URL del layer avatar-large di un item, ricavato dalla store icon. */
 export function itemLayerUrl(storeUrl: string, density: 1 | 2 | 3 = 2): string {
   const slug = slugFromStoreUrl(storeUrl);
   const suffix = density === 1 ? "" : `@${density}x`;
-  return `https://cdn2.wolvesville.com/avatarItems/${slug}.avatar-large${suffix}.png`;
+  return avatarLayerUrl(`avatarItems/${slug}.avatar-large${suffix}.png`);
 }
 
 /** I bodyPaint hanno 3 parti: body-, head-, mouth- + slug. */
@@ -70,11 +77,11 @@ export function bodyPaintLayerUrls(
 } {
   const slug = slugFromStoreUrl(storeUrl);
   const suffix = density === 1 ? "" : `@${density}x`;
-  const base = "https://cdn2.wolvesville.com/bodyPaints";
+  const base = "bodyPaints";
   return {
-    body: `${base}/body-${slug}.avatar-large${suffix}.png`,
-    head: `${base}/head-${slug}.avatar-large${suffix}.png`,
-    mouth: `${base}/mouth-${slug}.avatar-large${suffix}.png`,
+    body: avatarLayerUrl(`${base}/body-${slug}.avatar-large${suffix}.png`),
+    head: avatarLayerUrl(`${base}/head-${slug}.avatar-large${suffix}.png`),
+    mouth: avatarLayerUrl(`${base}/mouth-${slug}.avatar-large${suffix}.png`),
   };
 }
 
@@ -113,6 +120,7 @@ export function buildAvatarLayers(
   getItemStoreUrl: (id: string | null | undefined) => string | undefined,
   getBodyPaintStoreUrl: (id: string | null | undefined) => string | undefined,
   density: 1 | 2 | 3 = 2,
+  bodyPaintDensity: 1 | 2 | 3 = BODY_PAINT_DENSITY,
 ): WovLayerSpec[] {
   const layers: WovLayerSpec[] = [];
 
@@ -128,14 +136,14 @@ export function buildAvatarLayers(
       z,
       kind: "body",
       itemId: slots.bodyPaintId ?? undefined,
-      density: BODY_PAINT_DENSITY,
+      density: bodyPaintDensity,
     });
   };
 
-  // Il gioco carica body/head/mouth a @3x (gli item a @2x). Prendere @2x dava un omino
-  // ~1.7x troppo grande rispetto agli item.
+  // Il client carica body/head/mouth a @3x; le miniature possono richiedere una densita'
+  // inferiore per ridurre i dati trasferiti.
   const bpStore = getBodyPaintStoreUrl(slots.bodyPaintId);
-  const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, BODY_PAINT_DENSITY) : null;
+  const bpUrls = bpStore ? bodyPaintLayerUrls(bpStore, bodyPaintDensity) : null;
 
   pushItem("back", "backId", 1);
   pushItem("back2", "backId2", 2);

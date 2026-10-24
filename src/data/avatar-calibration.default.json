@@ -2,8 +2,8 @@
   "version": 1,
   "box": { "widthPct": 76, "ratioW": 372, "ratioH": 430, "offsetX": 0, "offsetY": 0 },
   "baseDivisor": 744,
-  "body": { "scale": 1, "dx": 0, "dy": 0 },
-  "items": { "scale": 1, "dx": 0, "dy": 0 },
+  "body": { "scale": 0.8, "dx": 0, "dy": 0 },
+  "items": { "scale": 0.8, "dx": 0, "dy": 0 },
   "layers": {},
   "overrides": {},
   "exportFit": true

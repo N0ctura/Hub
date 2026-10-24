@@ -61,17 +61,20 @@ export const FALLBACK_CALIBRATION: AvatarCalibration = {
   version: 1,
   box: { widthPct: 76, ratioW: 372, ratioH: 430, offsetX: 0, offsetY: 0 },
   baseDivisor: 744,
-  body: { ...NEUTRAL },
-  items: { ...NEUTRAL },
+  body: { scale: 0.8, dx: 0, dy: 0 },
+  items: { scale: 0.8, dx: 0, dy: 0 },
   layers: {},
   overrides: {},
   exportFit: true,
 };
 
-// v3: l'omino ora usa le immagini @3x e scala 1 (niente piu' correzione 0.58 della v2).
-// La chiave nuova evita che una vecchia calibrazione salvata copra i nuovi default.
-export const CALIBRATION_STORAGE_KEY = "wov_calibration_v3";
-const LEGACY_CALIBRATION_STORAGE_KEYS = ["wov_calibration_v2", "wov_calibration_v1"];
+// v4: riduce corpo e item del 20%; la chiave nuova applica i default aggiornati.
+export const CALIBRATION_STORAGE_KEY = "wov_calibration_v4";
+const LEGACY_CALIBRATION_STORAGE_KEYS = [
+  "wov_calibration_v3",
+  "wov_calibration_v2",
+  "wov_calibration_v1",
+];
 
 /* ------------------------------ sanitize -------------------------------- */
 

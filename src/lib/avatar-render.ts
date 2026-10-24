@@ -64,6 +64,11 @@ function withCacheBust(url: string): string {
   return `${url}${sep}cors=${Date.now()}`;
 }
 
+function withDensity(url: string, density: Density): string {
+  const suffix = density === 1 ? "" : `@${density}x`;
+  return url.replace(/@(?:1|2|3)x(?=\.png(?:[?#]|$))/i, suffix);
+}
+
 function loadOnce(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -111,15 +116,38 @@ async function loadLayers(
 
   const results = await Promise.all(
     base.map(async (spec, index): Promise<LoadedLayer | null> => {
+      const triedUrls = new Set<string>();
       for (const d of order) {
         const candidate = sets[d]?.[index];
         // stessa posizione = stesso layer (le liste sono costruite nello stesso ordine)
         if (!candidate || candidate.key !== spec.key) continue;
-        try {
-          const img = await loadImageCors(candidate.url);
-          return { spec: candidate, img, density: (candidate.density ?? d) as Density };
-        } catch {
-          /* prova la densita' successiva */
+
+        const density = (candidate.density ?? d) as Density;
+        const candidates =
+          candidate.kind === "body"
+            ? ([density, 2, 1] as Density[]).filter(
+                (value, i, values) => value <= density && values.indexOf(value) === i,
+              )
+            : [density];
+
+        for (const candidateDensity of candidates) {
+          const url =
+            candidate.kind === "body"
+              ? withDensity(candidate.url, candidateDensity)
+              : candidate.url;
+          if (triedUrls.has(url)) continue;
+          triedUrls.add(url);
+
+          try {
+            const img = await loadImageCors(url);
+            return {
+              spec: { ...candidate, url },
+              img,
+              density: candidate.kind === "body" ? candidateDensity : density,
+            };
+          } catch {
+            /* prova la densita' successiva */
+          }
         }
       }
       failed.push(spec.url);
@@ -136,6 +164,8 @@ export interface RenderOptions {
   /** Layer costruiti per ogni densita' con buildAvatarLayers(..., d). */
   layerSets: Record<Density, WovLayerSpec[]>;
   calibration: AvatarCalibration;
+  /** Sfondo opzionale, gia' selezionato nell'anteprima. */
+  background?: string;
   density?: Density; // default 3
 }
 
@@ -166,9 +196,28 @@ export async function renderAvatarBlob(opts: RenderOptions): Promise<RenderResul
     );
   }
 
+  const background = opts.background
+    ? await loadImageCors(opts.background).catch((error: unknown) => {
+        throw new AvatarRenderError(
+          "load",
+          `Impossibile caricare lo sfondo selezionato: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      })
+    : null;
+
   // Dimensione del quadrato in pixel: 372 unita' @1x × densita'.
   const boxW = (cal.baseDivisor / 2) * density;
   const boxH = boxW * (cal.box.ratioH / cal.box.ratioW);
+  const frameW = background ? boxW / (cal.box.widthPct / 100) : boxW;
+  const frameH = background ? (frameW * 343) / 380 : boxH;
+  const boxX = background
+    ? (frameW - boxW) / 2 + (cal.box.offsetX / 100) * frameW
+    : 0;
+  const boxY = background
+    ? frameH - boxH - (cal.box.offsetY / 100) * frameH
+    : 0;
 
   const placed = loaded.map((l) => ({
     ...l,
@@ -179,13 +228,16 @@ export async function renderAvatarBlob(opts: RenderOptions): Promise<RenderResul
       boxW,
       boxH,
     ),
+  })).map((layer) => ({
+    ...layer,
+    rect: { ...layer.rect, x: layer.rect.x + boxX, y: layer.rect.y + boxY },
   }));
 
   // Tela: il quadrato, oppure l'unione con tutti i layer (nessun taglio).
   let minX = 0;
   let minY = 0;
-  let maxX = boxW;
-  let maxY = boxH;
+  let maxX = background ? frameW : boxW;
+  let maxY = background ? frameH : boxH;
   if (cal.exportFit) {
     for (const p of placed) {
       minX = Math.min(minX, p.rect.x);
@@ -209,6 +261,19 @@ export async function renderAvatarBlob(opts: RenderOptions): Promise<RenderResul
   if (!ctx) throw new AvatarRenderError("canvas", "Canvas non disponibile");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
+
+  if (background) {
+    const coverScale = Math.max(frameW / background.naturalWidth, frameH / background.naturalHeight);
+    const backgroundW = background.naturalWidth * coverScale;
+    const backgroundH = background.naturalHeight * coverScale;
+    ctx.drawImage(
+      background,
+      -minX + (frameW - backgroundW) / 2,
+      -minY + (frameH - backgroundH) / 2,
+      backgroundW,
+      backgroundH,
+    );
+  }
 
   // Stesso z-order dell'anteprima (sort stabile: a parita' di z vale l'ordine di lista).
   const sorted = placed

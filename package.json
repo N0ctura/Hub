@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "wov:catalog": "python scripts/update_wov_catalog.py"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

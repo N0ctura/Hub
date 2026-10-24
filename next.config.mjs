@@ -9,6 +9,16 @@ const basePath = isProd ? '/Hub' : '';
 const nextConfig = {
   output: 'export',
   basePath,
+  ...(!isProd && {
+    async rewrites() {
+      return [
+        {
+          source: '/__wov-cdn/:path*',
+          destination: 'https://cdn2.wolvesville.com/:path*',
+        },
+      ];
+    },
+  }),
   // Espone il basePath anche al client (per gli asset di public/)
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
   images: {

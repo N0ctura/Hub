@@ -132,7 +132,7 @@ function AdjustControls({
         onChange={(dx) => onChange({ ...value, dx })}
       />
       <NumberSlider
-        label="Sposta Y (su = +)"
+        label="Sposta Y (su = +7)"
         value={value.dy}
         min={-30}
         max={30}

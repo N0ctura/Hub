@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Cinzel } from "next/font/google";
 import "@/app/globals.css";
 import { AppearanceProvider } from "@/context/appearance-context";
-import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel" });
@@ -31,7 +30,6 @@ export default function RootLayout({
         className={`${inter.variable} ${cinzel.variable} font-sans antialiased`}
       >
         <AppearanceProvider>{children}</AppearanceProvider>
-        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

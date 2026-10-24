@@ -1,12 +1,3 @@
-// Client per la Wolvesville Public API (https://api-docs.wolvesville.com)
-// L'API key NON viene mai scritta nel codice: l'utente la incolla una volta
-// nell'app e resta nel localStorage del suo browser.
-
-export const API_BASE = "https://api.wolvesville.com";
-
-const CACHE_PREFIX = "wov_cache_";
-const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 ore
-
 export type WovItemType =
   | "SHIRT"
   | "HAIR"
@@ -50,149 +41,8 @@ export interface WovBodyPaint {
   [key: string]: unknown;
 }
 
-export interface WovBackground {
-  id: string;
-  imageUrl: string;
-  [key: string]: unknown;
-}
-
 /** Slot dell'avatar, es. { hatId: "AbC", eyesId: null } */
 export type WovAvatarSlots = Record<string, string | null>;
-
-export interface WovSharedAvatar {
-  id: string;
-  avatar: { url: string; width: number; height: number };
-  items: WovAvatarSlots;
-}
-
-export class WovApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-/* ------------------------------- API key ------------------------------- */
-// La chiave viene iniettata a build time dal secret GitHub WOLVESVILLE_API_KEY
-// (nel workflow: NEXT_PUBLIC_WOV_API_KEY=${{ secrets.WOLVESVILLE_API_KEY }}).
-// Per lo sviluppo locale basta un file .env.local con la stessa variabile.
-
-export function getApiKey(): string | null {
-  const key = process.env.NEXT_PUBLIC_WOV_API_KEY;
-  return key && key.trim() ? key.trim() : null;
-}
-
-/* ------------------------------- fetch --------------------------------- */
-
-async function wovFetch<T>(
-  path: string,
-  options: { method?: string; body?: unknown } = {},
-): Promise<T> {
-  const key = getApiKey();
-  if (!key) throw new WovApiError(0, "API key non impostata");
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: options.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bot ${key}`,
-    },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
-
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = (await res.text()).slice(0, 300);
-    } catch {
-      /* ignore */
-    }
-    if (res.status === 401)
-      throw new WovApiError(401, "API key non valida o scaduta");
-    if (res.status === 429)
-      throw new WovApiError(429, "Rate limit dell'API raggiunto, riprova tra poco");
-    throw new WovApiError(res.status, `Errore API (${res.status}) ${detail}`);
-  }
-
-  return (await res.json()) as T;
-}
-
-/* ------------------------------ cache ---------------------------------- */
-
-function readCache<T>(endpoint: string): T | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(CACHE_PREFIX + endpoint);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { t: number; d: T };
-    if (Date.now() - parsed.t > CACHE_TTL) return null;
-    return parsed.d;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(endpoint: string, data: unknown): void {
-  try {
-    window.localStorage.setItem(
-      CACHE_PREFIX + endpoint,
-      JSON.stringify({ t: Date.now(), d: data }),
-    );
-  } catch {
-    // quota localStorage esaurita: ignoriamo, il cache è solo un'ottimizzazione
-  }
-}
-
-/* ----------------------------- endpoints -------------------------------- */
-
-export async function fetchAvatarItems(force = false): Promise<WovAvatarItem[]> {
-  if (!force) {
-    const cached = readCache<WovAvatarItem[]>("avatarItems");
-    if (cached) return cached;
-  }
-  const data = await wovFetch<WovAvatarItem[]>("/items/avatarItems");
-  writeCache("avatarItems", data);
-  return data;
-}
-
-/** Tag (colori, origini, ecc.) raggruppati per item id */
-export async function fetchItemTags(
-  force = false,
-): Promise<Record<string, string[]>> {
-  if (!force) {
-    const cached = readCache<Record<string, string[]>>("tags");
-    if (cached) return cached;
-  }
-  const rows = await wovFetch<{ avatarItemId: string; tags: string[] }[]>(
-    "/items/tags",
-  );
-  const map: Record<string, string[]> = {};
-  for (const row of rows) map[row.avatarItemId] = row.tags ?? [];
-  writeCache("tags", map);
-  return map;
-}
-
-export async function fetchBodyPaints(force = false): Promise<WovBodyPaint[]> {
-  if (!force) {
-    const cached = readCache<WovBodyPaint[]>("bodyPaints");
-    if (cached) return cached;
-  }
-  const data = await wovFetch<WovBodyPaint[]>("/items/bodyPaints");
-  writeCache("bodyPaints", data);
-  return data;
-}
-
-export async function fetchBackgrounds(force = false): Promise<WovBackground[]> {
-  if (!force) {
-    const cached = readCache<WovBackground[]>("backgrounds");
-    if (cached) return cached;
-  }
-  const data = await wovFetch<WovBackground[]>("/items/backgrounds");
-  writeCache("backgrounds", data);
-  return data;
-}
 
 export interface WovSkinPack {
   id: string;
@@ -206,6 +56,28 @@ export interface WovSkinPack {
   slots: WovAvatarSlots;
   /** Id di item trovati senza tipo: il tipo si ricava dalla lista item (resolvePackSlots). */
   itemIds: string[];
+}
+
+export interface WovCatalogFile {
+  version: number;
+  generatedAt: string;
+  items: WovAvatarItem[];
+  bodyPaints: WovBodyPaint[];
+  tags: Record<string, string[]>;
+  colorIndex: Record<string, string[]>;
+  packs: {
+    sets: Record<string, unknown>[];
+    collections: Record<string, unknown>[];
+    roleCards: Record<string, unknown>[];
+  };
+}
+
+export interface WovCatalogData {
+  items: WovAvatarItem[];
+  bodyPaints: WovBodyPaint[];
+  tags: Record<string, string[]>;
+  colorIndex: Record<string, string[]>;
+  skinPacks: WovSkinPack[];
 }
 
 const KNOWN_TYPES = new Set<string>([
@@ -333,71 +205,70 @@ function toPack(
   };
 }
 
-export async function fetchSkinPacks(force = false): Promise<WovSkinPack[]> {
-  // chiave "skinPacks2": la forma dei dati e' cambiata, la vecchia cache va ignorata
-  if (!force) {
-    const cached = readCache<WovSkinPack[]>("skinPacks2");
-    if (cached) return cached;
-  }
-  const [sets, collections, roleCards] = await Promise.all([
-    wovFetch<Record<string, unknown>[]>("/items/avatarItemSets").catch(
-      () => [] as Record<string, unknown>[],
-    ),
-    wovFetch<Record<string, unknown>[]>("/items/avatarItemCollections").catch(
-      () => [] as Record<string, unknown>[],
-    ),
-    wovFetch<Record<string, unknown>[]>("/items/advancedRoleCardOffers").catch(
-      () => [] as Record<string, unknown>[],
-    ),
-  ]);
-
+export function normalizeSkinPacks(
+  sets: Record<string, unknown>[],
+  collections: Record<string, unknown>[],
+  roleCards: Record<string, unknown>[],
+): WovSkinPack[] {
   const out: WovSkinPack[] = [];
-  for (const s of sets) {
-    const p = toPack(s, "SET", ["id", "setId"], "COMMON");
-    if (p) out.push(p);
+  for (const set of sets) {
+    const pack = toPack(set, "SET", ["id", "setId"], "COMMON");
+    if (pack) out.push(pack);
   }
-  for (const c of collections) {
-    const p = toPack(c, "COLLECTION", ["id", "collectionId"], "COMMON");
-    if (p) out.push(p);
+  for (const collection of collections) {
+    const pack = toPack(collection, "COLLECTION", ["id", "collectionId"], "COMMON");
+    if (pack) out.push(pack);
   }
-  for (const rc of roleCards) {
-    const p = toPack(rc, "ROLE_CARD", ["id", "offerId"], "LEGENDARY");
-    if (p) out.push(p);
+  for (const roleCard of roleCards) {
+    const pack = toPack(roleCard, "ROLE_CARD", ["id", "offerId"], "LEGENDARY");
+    if (pack) out.push(pack);
   }
-
-  // Aiuto per il debug: se un pacchetto non ha ne' slot ne' id, mostra com'e' fatto davvero.
-  if (typeof window !== "undefined") {
-    const empty = out.filter((p) => !Object.values(p.slots).some(Boolean) && !p.itemIds.length);
-    if (empty.length) {
-      const src = [...sets, ...collections, ...roleCards].find(
-        (r) => String(r.id ?? r.setId ?? r.collectionId ?? r.offerId) === empty[0].id,
-      );
-      console.warn(
-        `[wov] ${empty.length} pacchetti senza item riconoscibili. Esempio di dato grezzo:`,
-        src,
-      );
-    }
-  }
-
-  writeCache("skinPacks2", out);
   return out;
 }
 
-/**
- * Chiede all'API di renderizzare la skin con il motore grafico ufficiale
- * del gioco: restituisce URL dell'immagine + id condivisibile.
- */
-export async function createSharedAvatar(
-  slots: WovAvatarSlots,
-): Promise<WovSharedAvatar> {
-  const body: Record<string, string> = {};
-  for (const [k, v] of Object.entries(slots)) {
-    if (v) body[k] = v;
-  }
-  return wovFetch<WovSharedAvatar>("/avatars/sharedAvatar", {
-    method: "POST",
-    body,
+export async function fetchWovCatalog(
+  basePath = "",
+  force = false,
+): Promise<WovCatalogData> {
+  const refresh = force ? `?refresh=${Date.now()}` : "";
+  const response = await fetch(`${basePath}/wov-catalog.json${refresh}`, {
+    cache: force ? "reload" : "default",
   });
+  if (!response.ok) {
+    throw new Error(
+      `Catalogo Wolvesville non disponibile (${response.status}). Rigeneralo con npm run wov:catalog.`,
+    );
+  }
+
+  const raw: unknown = await response.json();
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Il file wov-catalog.json non contiene un oggetto valido.");
+  }
+  const catalog = raw as Partial<WovCatalogFile>;
+  if (
+    !Array.isArray(catalog.items) ||
+    !Array.isArray(catalog.bodyPaints) ||
+    !catalog.tags ||
+    !catalog.colorIndex ||
+    !catalog.packs ||
+    !Array.isArray(catalog.packs.sets) ||
+    !Array.isArray(catalog.packs.collections) ||
+    !Array.isArray(catalog.packs.roleCards)
+  ) {
+    throw new Error("Il file wov-catalog.json non ha una struttura valida.");
+  }
+
+  return {
+    items: catalog.items,
+    bodyPaints: catalog.bodyPaints,
+    tags: catalog.tags,
+    colorIndex: catalog.colorIndex,
+    skinPacks: normalizeSkinPacks(
+      catalog.packs.sets,
+      catalog.packs.collections,
+      catalog.packs.roleCards,
+    ),
+  };
 }
 
 /* ----------------------------- costanti --------------------------------- */

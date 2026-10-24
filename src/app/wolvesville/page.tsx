@@ -24,13 +24,8 @@ import {
   RARITY_ORDER,
   TYPE_LABELS,
   WOV_SLOTS,
-  fetchAvatarItems,
-  fetchBodyPaints,
-  fetchItemTags,
-  fetchSkinPacks,
+  fetchWovCatalog,
   resolvePackSlots,
-  createSharedAvatar,
-  getApiKey,
   type WovAvatarItem,
   type WovAvatarSlots,
   type WovBodyPaint,
@@ -104,6 +99,21 @@ const ITEM_TYPES: WovItemType[] = [
   "GRAVESTONE",
 ];
 
+const COLOR_FILTERS = [
+  { key: "black", label: "Nero" },
+  { key: "blue", label: "Blu" },
+  { key: "brown", label: "Marrone" },
+  { key: "gray", label: "Grigio" },
+  { key: "green", label: "Verde" },
+  { key: "multicolor", label: "Multicolore" },
+  { key: "orange", label: "Arancione" },
+  { key: "pink", label: "Rosa" },
+  { key: "purple", label: "Viola" },
+  { key: "red", label: "Rosso" },
+  { key: "white", label: "Bianco" },
+  { key: "yellow", label: "Giallo" },
+] as const;
+
 interface SaveSheetState {
   /** blob locale pronto da salvare (canvas o fetch riuscito) */
   objectUrl?: string;
@@ -149,11 +159,10 @@ function itemRarity(item: AnyItem) {
 }
 
 export default function WolvesvillePage() {
-  const apiKey = getApiKey();
-
   const [tab, setTab] = useState<"avatar" | "items">("avatar");
   const [cat, setCat] = useState("hat");
   const [search, setSearch] = useState("");
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [itemType, setItemType] = useState<WovItemType>("SHIRT");
   const [rarity, setRarity] = useState<string | null>(null);
 
@@ -161,6 +170,7 @@ export default function WolvesvillePage() {
   const [bodyPaints, setBodyPaints] = useState<WovBodyPaint[]>([]);
   const [skinPacks, setSkinPacks] = useState<WovSkinPack[]>([]);
   const [tags, setTags] = useState<Record<string, string[]>>({});
+  const [colorIndex, setColorIndex] = useState<Record<string, string[]>>({});
   const [slots, setSlots] = useState<WovAvatarSlots>({});
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -183,6 +193,7 @@ export default function WolvesvillePage() {
   const [showGuides, setShowGuides] = useState(true);
   const [naturals, setNaturals] = useState<Record<string, NaturalSize>>({});
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [saveSheet, setSaveSheet] = useState<SaveSheetState | null>(null);
 
   const setCalibration = useCallback((next: AvatarCalibration) => {
@@ -265,6 +276,10 @@ export default function WolvesvillePage() {
       }),
     [skinPacks, typeOfId, itemMap],
   );
+  const selectedColorIds = useMemo(
+    () => new Set(selectedColor ? colorIndex[selectedColor] ?? [] : []),
+    [colorIndex, selectedColor],
+  );
 
   const layers = layerSets[2];
 
@@ -290,22 +305,22 @@ export default function WolvesvillePage() {
     setDataError(null);
 
     try {
-      const [itemList, paintList, tagMap, packList] = await Promise.all([
-        fetchAvatarItems(force),
-        fetchBodyPaints(force),
-        fetchItemTags(force),
-        fetchSkinPacks(force),
-      ]);
+      const catalog = await fetchWovCatalog(
+        process.env.NEXT_PUBLIC_BASE_PATH ?? "",
+        force,
+      );
 
-      setItems(itemList);
-      setBodyPaints(paintList);
-      setTags(tagMap);
-      setSkinPacks(packList);
+      setItems(catalog.items);
+      setBodyPaints(catalog.bodyPaints);
+      setTags(catalog.tags);
+      setColorIndex(catalog.colorIndex);
+      setSkinPacks(catalog.skinPacks);
 
       setSlots((prev) => {
         if (prev.bodyPaintId) return prev;
         const defaultPaint =
-          paintList.find((p) => p.imageUrl.includes("skin-1")) ?? paintList[0];
+          catalog.bodyPaints.find((p) => p.imageUrl.includes("skin-1")) ??
+          catalog.bodyPaints[0];
         return defaultPaint ? { ...prev, bodyPaintId: defaultPaint.id } : prev;
       });
     } catch (error) {
@@ -316,8 +331,8 @@ export default function WolvesvillePage() {
   }, []);
 
   useEffect(() => {
-    if (apiKey) void loadAll();
-  }, [apiKey, loadAll]);
+    void loadAll();
+  }, [loadAll]);
 
   const activeCategory = useMemo(
     () => CATEGORIES.find((c) => c.key === cat) ?? CATEGORIES[0],
@@ -346,15 +361,26 @@ export default function WolvesvillePage() {
       });
     }
 
+    if (selectedColor) {
+      base = base.filter((item) => selectedColorIds.has(item.id));
+    }
+
     return [...base].sort((a, b) =>
       itemTitle(a).localeCompare(itemTitle(b), undefined, { sensitivity: "base" }),
     );
-  }, [activeCategory, bodyPaints, items, search, tags]);
+  }, [activeCategory, bodyPaints, items, search, selectedColor, selectedColorIds, tags]);
 
   const categorySkinPacks = useMemo(() => {
     if (!activeCategory.isSkinPack) return [];
     const q = search.trim().toLowerCase();
     const base = resolvedPacks.filter(({ pack, label }) => {
+      if (
+        selectedColor &&
+        !Object.values(pack.slots).some((id) => id && selectedColorIds.has(id)) &&
+        !pack.itemIds.some((id) => selectedColorIds.has(id))
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         label.toLowerCase().includes(q) ||
@@ -365,7 +391,7 @@ export default function WolvesvillePage() {
     return [...base].sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
     );
-  }, [activeCategory, search, resolvedPacks]);
+  }, [activeCategory, search, resolvedPacks, selectedColor, selectedColorIds]);
 
   const equipSkinPack = (pack: WovSkinPack, packSlots: WovAvatarSlots, label: string) => {
     if (!Object.values(packSlots).some(Boolean)) {
@@ -390,6 +416,9 @@ export default function WolvesvillePage() {
     return items
       .filter((item) => item.type === itemType)
       .filter((item) => (rarity ? item.rarity === rarity : true))
+      .filter((item) =>
+        selectedColor ? selectedColorIds.has(item.id) : true,
+      )
       .filter((item) => {
         if (!q) return true;
 
@@ -403,7 +432,7 @@ export default function WolvesvillePage() {
           tagMatch
         );
       });
-  }, [items, itemType, rarity, search, tags]);
+  }, [items, itemType, rarity, search, selectedColor, selectedColorIds, tags]);
 
   const equipItem = (item: AnyItem) => {
     if ("type" in item) {
@@ -464,12 +493,12 @@ export default function WolvesvillePage() {
     const fileName = `wolvesville-avatar-${density}x-${Date.now()}.png`;
 
     if (layerSets[density].length === 0) {
-      toast.error("Nessun layer da scaricare: scegli almeno un item o un body paint");
+      setDownloadError("Nessun layer da scaricare: scegli almeno un item o un body paint.");
       return;
     }
 
     setDownloading(true);
-    const loadingId = toast.loading("Preparo l'immagine 3x...");
+    setDownloadError(null);
 
     // Consegna del file: su iPhone/iPad serve un gesto utente fresco -> pannello "Salva"
     const deliver = (blob: Blob, w?: number, h?: number) => {
@@ -480,21 +509,25 @@ export default function WolvesvillePage() {
           fileName,
           note: w && h ? `${w}×${h}px` : undefined,
         });
-        toast.success("Immagine pronta: tocca Salva", { id: loadingId });
       } else {
         downloadBlob(blob, fileName);
-        toast.success(`Avatar ${density}x scaricato`, { id: loadingId });
       }
     };
 
     try {
-      // 1) Strada principale: composizione locale sul canvas (nessuna API, stessa calibrazione dell'anteprima)
-      const result = await renderAvatarBlob({ layerSets, calibration, density });
-      deliver(result.blob, result.width, result.height);
+      const result = await renderAvatarBlob({
+        layerSets,
+        calibration,
+        background: activeBg,
+        density,
+      });
       if (result.skipped.length) {
-        toast.warning(`${result.skipped.length} layer non caricati, saltati`);
+        setDownloadError(
+          `${result.skipped.length} layer non caricati. Controlla la connessione e riprova; non è stato scaricato un PNG incompleto.`,
+        );
+        return;
       }
-      return;
+      deliver(result.blob, result.width, result.height);
     } catch (renderError) {
       const detail =
         renderError instanceof AvatarRenderError
@@ -502,32 +535,8 @@ export default function WolvesvillePage() {
           : renderError instanceof Error
             ? renderError.message
             : String(renderError);
-      console.warn("[download] canvas non riuscito, provo l'API ufficiale:", renderError);
-
-      // 2) Fallback: PNG renderizzato da Wolvesville (richiede API key)
-      try {
-        const shared = await createSharedAvatar(slots);
-        const url = shared.avatar.url.replace(/\.png(\?.*)?$/i, `@${density}x.png$1`);
-        try {
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          deliver(await res.blob());
-        } catch {
-          // CORS bloccato: l'<img> si puo' comunque mostrare -> salvataggio manuale
-          setSaveSheet({ remoteUrl: url, fileName, note: "tieni premuto sull'immagine" });
-          toast.message("Download diretto bloccato dal browser: salva dal pannello", {
-            id: loadingId,
-          });
-        }
-        return;
-      } catch (apiError) {
-        const apiDetail = apiError instanceof Error ? apiError.message : String(apiError);
-        console.error("[download] fallito anche con l'API:", apiError);
-        toast.error(`Download non riuscito. Canvas: ${detail}. API: ${apiDetail}`, {
-          id: loadingId,
-          duration: 12000,
-        });
-      }
+      console.error("[download] rendering calibrato non riuscito:", renderError);
+      setDownloadError(`Download non riuscito: ${detail}`);
     } finally {
       setDownloading(false);
     }
@@ -696,8 +705,13 @@ export default function WolvesvillePage() {
             </div>
 
             <p className="mt-1.5 text-center text-[10px] text-[var(--wov-muted)]">
-              3x qualità massima · PNG trasparente composto direttamente nel browser.
+              3x qualità massima · PNG composto nel browser, con sfondo se selezionato.
             </p>
+            {downloadError && (
+              <p role="alert" className="mt-2 text-center text-xs text-red-400">
+                {downloadError}
+              </p>
+            )}
 
             <input
               ref={fileRef}
@@ -782,16 +796,7 @@ export default function WolvesvillePage() {
             ))}
           </div>
 
-          {!apiKey ? (
-            <div className="flex flex-1 items-center justify-center p-6 text-center">
-              <div>
-                <p className="text-sm font-bold">API key non configurata</p>
-                <p className="mt-2 text-xs text-[var(--wov-muted)]">
-                  Controlla il secret <code>WOLVESVILLE_API_KEY</code> nel workflow GitHub.
-                </p>
-              </div>
-            </div>
-          ) : dataError ? (
+          {dataError ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="max-w-md text-sm text-red-400">{dataError}</p>
               <button
@@ -857,6 +862,13 @@ export default function WolvesvillePage() {
                   <RefreshCw size={14} className={loadingData ? "animate-spin" : ""} />
                 </button>
               </div>
+
+              {!activeCategory.isBodyPaint && (
+                <ColorFilterBar
+                  selectedColor={selectedColor}
+                  onSelect={setSelectedColor}
+                />
+              )}
 
               <div className="wov-scroll flex-1 overflow-y-auto p-1">
                 {activeCategory.isSkinPack ? (
@@ -1030,6 +1042,11 @@ export default function WolvesvillePage() {
                 </select>
               </div>
 
+              <ColorFilterBar
+                selectedColor={selectedColor}
+                onSelect={setSelectedColor}
+              />
+
               <p className="mb-2 text-center text-[10px] text-[var(--wov-muted)]">
                 {loadingData
                   ? "Caricamento catalogo..."
@@ -1080,6 +1097,49 @@ export default function WolvesvillePage() {
   );
 }
 
+function ColorFilterBar({
+  selectedColor,
+  onSelect,
+}: {
+  selectedColor: string | null;
+  onSelect: (color: string | null) => void;
+}) {
+  return (
+    <div
+      aria-label="Filtra per colore"
+      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--wov-panel-2)] px-2 py-1.5"
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        aria-pressed={selectedColor === null}
+        className={`shrink-0 rounded px-2 py-1 text-[9px] font-bold ${
+          selectedColor === null
+            ? "bg-[var(--wov-accent)] text-white"
+            : "bg-[var(--wov-tile)] text-[var(--wov-muted)]"
+        }`}
+      >
+        Tutti
+      </button>
+      {COLOR_FILTERS.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onSelect(selectedColor === key ? null : key)}
+          aria-pressed={selectedColor === key}
+          className={`shrink-0 rounded px-2 py-1 text-[9px] font-bold ${
+            selectedColor === key
+              ? "bg-[var(--wov-accent)] text-white"
+              : "bg-[var(--wov-tile)] text-[var(--wov-muted)]"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** True appena l'elemento entra (quasi) nello schermo: evita di montare migliaia di <img> in anticipo. */
 function useInView(ref: RefObject<Element | null>): boolean {
   const [seen, setSeen] = useState(false);
@@ -1097,7 +1157,7 @@ function useInView(ref: RefObject<Element | null>): boolean {
           io.disconnect();
         }
       },
-      { rootMargin: "300px" },
+      { rootMargin: "100px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -1121,6 +1181,7 @@ function StoreIcon({ src, alt, className }: { src: string; alt: string; classNam
       src={urls[stage]}
       alt={alt}
       loading="lazy"
+      decoding="async"
       draggable={false}
       className={className}
       onError={() => setStage((s) => (s === 0 && urls[1] !== urls[0] ? 1 : 2))}
@@ -1128,8 +1189,8 @@ function StoreIcon({ src, alt, className }: { src: string; alt: string; classNam
   );
 }
 
-/** Zoom della miniatura di un pacchetto: mostra testa e spalle come nel gioco. */
-const PACK_THUMB_ZOOM = 1.5;
+/** Riduce l'avatar abbastanza da contenerne la silhouette nel riquadro largo del pacchetto. */
+const PACK_THUMB_SCALE = 78;
 
 /** Miniatura di un pacchetto skin: l'avatar composto con lo STESSO motore dell'anteprima grande. */
 function PackThumb({
@@ -1146,7 +1207,7 @@ function PackThumb({
   const ref = useRef<HTMLDivElement>(null);
   const visible = useInView(ref);
   const layers = useMemo(
-    () => (visible ? buildAvatarLayers(slots, itemUrl, paintUrl, 2) : []),
+    () => (visible ? buildAvatarLayers(slots, itemUrl, paintUrl, 2, 2) : []),
     // slots e' un oggetto nuovo a ogni render del genitore: si confronta il contenuto
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, JSON.stringify(slots), itemUrl, paintUrl],
@@ -1154,12 +1215,11 @@ function PackThumb({
 
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{ transform: `scale(${PACK_THUMB_ZOOM})`, transformOrigin: "50% 100%" }}
-      >
-        <AvatarPreview layers={layers} calibration={calibration} />
-      </div>
+      <AvatarPreview
+        layers={layers}
+        calibration={calibration}
+        scale={PACK_THUMB_SCALE}
+      />
     </div>
   );
 }
@@ -1231,6 +1291,8 @@ function WovLayer({
     <img
       src={spec.url}
       alt=""
+      loading="lazy"
+      decoding="async"
       draggable={false}
       onLoad={(event) => {
         const w = event.currentTarget.naturalWidth;

@@ -241,7 +241,7 @@ def fetch_image(url: str) -> tuple[str, str] | None:
                     raise RuntimeError(f"Image exceeds the 25 MiB safety limit: {url}")
                 return mime_type, base64.b64encode(data).decode("ascii")
         except HTTPError as error:
-            if error.code == 404:
+            if error.code in (403, 404):
                 return None
             if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
                 raise RuntimeError(f"Image download failed ({error.code}): {url}") from error
@@ -258,7 +258,9 @@ def fetch_asset_batch(urls: list[str]) -> dict[str, tuple[str, str] | None]:
         return {url: future.result() for future, url in futures.items()}
 
 
-def download_assets(plans: dict[str, dict]) -> dict[str, dict[str, str | int]]:
+def download_assets(
+    plans: dict[str, dict],
+) -> tuple[dict[str, dict[str, str | int]], list[str]]:
     pending = set(plans)
     assets: dict[str, dict[str, str | int]] = {}
     max_candidates = max(
@@ -298,20 +300,22 @@ def download_assets(plans: dict[str, dict]) -> dict[str, dict[str, str | int]]:
             f"(fallback pass {candidate_index + 1})."
         )
 
-    required_missing = [url for url in pending if plans[url]["required"]]
+    missing = sorted(pending)
+    required_missing = [url for url in missing if plans[url]["required"]]
+    optional_missing = len(missing) - len(required_missing)
     if required_missing:
-        examples = ", ".join(required_missing[:5])
-        raise RuntimeError(
-            f"Could not download {len(required_missing)} required local images. "
-            f"Examples: {examples}"
-        )
-    if pending:
         print(
-            f"Optional preview images unavailable: {len(pending)}.",
+            f"Required CDN images unavailable after all density fallbacks: "
+            f"{len(required_missing)}. Examples: {', '.join(required_missing[:5])}",
+            file=sys.stderr,
+        )
+    if optional_missing:
+        print(
+            f"Optional preview images unavailable: {optional_missing}.",
             file=sys.stderr,
         )
 
-    return assets
+    return assets, missing
 
 
 def write_catalog(catalog: dict) -> None:
@@ -375,7 +379,7 @@ def main() -> int:
         "collections": results["collections"],
         "roleCards": results["roleCards"],
     }
-    assets = download_assets(
+    assets, missing_assets = download_assets(
         build_asset_plans(
             results["items"],
             results["bodyPaints"],
@@ -391,6 +395,7 @@ def main() -> int:
         "colorIndex": color_index,
         "packs": packs,
         "assets": assets,
+        "missingAssets": missing_assets,
     }
     write_catalog(catalog)
 

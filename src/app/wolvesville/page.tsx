@@ -24,6 +24,7 @@ import {
   RARITY_ORDER,
   TYPE_LABELS,
   WOV_SLOTS,
+  createSharedAvatar,
   fetchWovCatalog,
   resolvePackSlots,
   type WovAvatarItem,
@@ -194,6 +195,8 @@ export default function WolvesvillePage() {
   const [naturals, setNaturals] = useState<Record<string, NaturalSize>>({});
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [saveSheet, setSaveSheet] = useState<SaveSheetState | null>(null);
 
   const setCalibration = useCallback((next: AvatarCalibration) => {
@@ -212,6 +215,14 @@ export default function WolvesvillePage() {
       if (window.localStorage.getItem("wov_dev") === "1") setDevEnabled(true);
     } catch {
       /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      setApiKey(window.localStorage.getItem("wov_download_api_key") ?? "");
+    } catch {
+      setApiKeyError("Impossibile leggere la chiave salvata nel browser.");
     }
   }, []);
 
@@ -514,6 +525,7 @@ export default function WolvesvillePage() {
       }
     };
 
+    let canvasFailure = "";
     try {
       const result = await renderAvatarBlob({
         layerSets,
@@ -522,21 +534,59 @@ export default function WolvesvillePage() {
         density,
       });
       if (result.skipped.length) {
-        setDownloadError(
-          `${result.skipped.length} layer non caricati. Controlla la connessione e riprova; non è stato scaricato un PNG incompleto.`,
-        );
-        return;
+        throw new Error(`${result.skipped.length} layer non caricati dal CDN.`);
       }
       deliver(result.blob, result.width, result.height);
+      setDownloading(false);
+      return;
     } catch (renderError) {
-      const detail =
+      canvasFailure =
         renderError instanceof AvatarRenderError
           ? renderError.message
           : renderError instanceof Error
             ? renderError.message
             : String(renderError);
-      console.error("[download] rendering calibrato non riuscito:", renderError);
-      setDownloadError(`Download non riuscito: ${detail}`);
+    }
+
+    if (!apiKey.trim()) {
+      setDownloadError(
+        `Composizione locale non riuscita (${canvasFailure}). Inserisci la tua API key nelle Impostazioni per usare il rendering ufficiale.`,
+      );
+      setSettingsOpen(true);
+      setDownloading(false);
+      return;
+    }
+
+    try {
+      const shared = await createSharedAvatar(slots, apiKey.trim());
+      const imageUrl = shared.avatar.url.replace(
+        /\.png(?=$|[?#])/i,
+        `@${density}x.png`,
+      );
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        deliver(
+          blob,
+          shared.avatar.width * density,
+          shared.avatar.height * density,
+        );
+      } catch {
+        setSaveSheet({
+          remoteUrl: imageUrl,
+          fileName,
+          note: activeBg
+            ? "Rendering ufficiale; lo sfondo importato non viene applicato"
+            : "Rendering ufficiale Wolvesville",
+        });
+      }
+    } catch (apiError) {
+      const detail =
+        apiError instanceof Error ? apiError.message : String(apiError);
+      setDownloadError(
+        `Canvas: ${canvasFailure}. Rendering API non riuscito: ${detail}`,
+      );
     } finally {
       setDownloading(false);
     }
@@ -609,7 +659,7 @@ export default function WolvesvillePage() {
             )}
 
             {settingsOpen && !hideUi && (
-              <div className="absolute left-2 top-12 z-30 w-[260px] rounded-md border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-3 shadow-xl">
+              <div className="absolute left-2 top-12 z-30 max-h-[calc(100%-3.5rem)] w-[300px] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-3 shadow-xl">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider">
                     Impostazioni
@@ -632,6 +682,70 @@ export default function WolvesvillePage() {
                     className="h-4 w-4 accent-[var(--wov-accent)]"
                   />
                 </label>
+
+                <div className="mt-3 border-t border-[var(--wov-panel-2)] pt-3">
+                  <label
+                    htmlFor="wov-api-key"
+                    className="mb-1 block text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    API key Wolvesville · download
+                  </label>
+                  <input
+                    id="wov-api-key"
+                    type="password"
+                    autoComplete="off"
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    placeholder="Incolla la tua API key"
+                    className="w-full rounded-md border border-[var(--wov-panel-2)] bg-[var(--wov-tile)] px-2 py-1.5 text-xs outline-none"
+                  />
+                  <div className="mt-1.5 flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          window.localStorage.setItem(
+                            "wov_download_api_key",
+                            apiKey.trim(),
+                          );
+                          setApiKey(apiKey.trim());
+                          setApiKeyError(null);
+                          toast.success("API key salvata solo in questo browser");
+                        } catch {
+                          setApiKeyError("Impossibile salvare la chiave nel browser.");
+                        }
+                      }}
+                      className="flex-1 rounded-md bg-[var(--wov-accent)] px-2 py-1.5 text-[10px] font-bold text-white"
+                    >
+                      Salva chiave
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          window.localStorage.removeItem("wov_download_api_key");
+                          setApiKey("");
+                          setApiKeyError(null);
+                          toast.success("API key rimossa da questo browser");
+                        } catch {
+                          setApiKeyError("Impossibile rimuovere la chiave salvata.");
+                        }
+                      }}
+                      className="rounded-md bg-[var(--wov-tile)] px-2 py-1.5 text-[10px] font-bold"
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[9px] leading-snug text-[var(--wov-muted)]">
+                    Salvata nel localStorage di questo browser; non è il secret GitHub
+                    e non è protetta da chi può usare questa pagina.
+                  </p>
+                  {apiKeyError && (
+                    <p role="alert" className="mt-1 text-[10px] text-red-400">
+                      {apiKeyError}
+                    </p>
+                  )}
+                </div>
 
                 <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
                   <div className="mb-2 flex items-center justify-between text-xs">

@@ -1,3 +1,5 @@
+const WOV_API_BASE = "https://api.wolvesville.com";
+
 export type WovItemType =
   | "SHIRT"
   | "HAIR"
@@ -78,6 +80,55 @@ export interface WovCatalogData {
   tags: Record<string, string[]>;
   colorIndex: Record<string, string[]>;
   skinPacks: WovSkinPack[];
+}
+
+export interface WovSharedAvatar {
+  id: string;
+  avatar: { url: string; width: number; height: number };
+  items: WovAvatarSlots;
+}
+
+export async function createSharedAvatar(
+  slots: WovAvatarSlots,
+  apiKey: string,
+): Promise<WovSharedAvatar> {
+  const body = Object.fromEntries(
+    Object.entries(slots).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  const response = await fetch(`${WOV_API_BASE}/avatars/sharedAvatar`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bot ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("API key Wolvesville non valida o senza permessi.");
+    }
+    if (response.status === 429) {
+      throw new Error("Limite API Wolvesville raggiunto. Riprova più tardi.");
+    }
+    throw new Error(`API Wolvesville non disponibile (${response.status}).`);
+  }
+
+  const result: unknown = await response.json();
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("avatar" in result) ||
+    !result.avatar ||
+    typeof result.avatar !== "object" ||
+    !("url" in result.avatar) ||
+    typeof result.avatar.url !== "string"
+  ) {
+    throw new Error("L'API Wolvesville ha restituito un avatar non valido.");
+  }
+
+  return result as WovSharedAvatar;
 }
 
 const KNOWN_TYPES = new Set<string>([

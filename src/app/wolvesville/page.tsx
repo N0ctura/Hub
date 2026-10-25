@@ -165,7 +165,7 @@ export default function WolvesvillePage() {
   // Un solo avatar: lo sfondo resta salvato con la stessa chiave di prima ("0")
   const activeAvatar = 0;
   const [backgrounds, setBackgrounds] = usePersisted<Record<string, string>>("wov_backgrounds", {});
-  const [avatarScale, setAvatarScale] = usePersisted("wov_avatar_scale", 100);
+  const [avatarScale] = usePersisted("wov_avatar_scale", 100);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -182,7 +182,6 @@ export default function WolvesvillePage() {
   const [showGuides, setShowGuides] = useState(true);
   const [naturals, setNaturals] = useState<Record<string, NaturalSize>>({});
   const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_WOV_API_KEY?.trim() ?? "";
 
   const setCalibration = useCallback((next: AvatarCalibration) => {
@@ -533,12 +532,11 @@ export default function WolvesvillePage() {
     const fileName = `wolvesville-avatar-${density}x-${Date.now()}.png`;
 
     if (layerSets[density].length === 0) {
-      setDownloadError("Nessun layer da scaricare: scegli almeno un item o un body paint.");
+      toast.error("Nessun layer da scaricare: scegli almeno un item o un body paint.");
       return;
     }
 
     setDownloading(true);
-    setDownloadError(null);
 
     // Il download parte subito, senza anteprima intermedia (anche su iPhone/iPad)
     const deliver = (blob: Blob) => downloadBlob(blob, fileName);
@@ -576,7 +574,7 @@ export default function WolvesvillePage() {
     }
 
     if (!apiKey.trim()) {
-      setDownloadError(
+      toast.error(
         `Composizione locale non riuscita (${canvasFailure}). Il secret WOLVESVILLE_API_KEY non è stato incluso nell'ultima build: verifica il secret GitHub e rilancia il deploy.`,
       );
       setDownloading(false);
@@ -611,26 +609,15 @@ export default function WolvesvillePage() {
     } catch (apiError) {
       const detail =
         apiError instanceof Error ? apiError.message : String(apiError);
-      setDownloadError(
-        `Canvas: ${canvasFailure}. Rendering API non riuscito: ${detail}`,
-      );
+      toast.error(`Canvas: ${canvasFailure}. Rendering API non riuscito: ${detail}`);
     } finally {
       setDownloading(false);
     }
   };
 
-  const share = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copiato");
-    } catch {
-      toast.error("Impossibile copiare il link");
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[var(--wov-page)] font-sans text-[var(--wov-text)]">
-      <div className="mx-auto flex max-w-[1240px] flex-col gap-3 p-2 sm:p-4 lg:h-screen lg:flex-row lg:gap-3">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--wov-page)] font-sans text-[var(--wov-text)]">
+      <div className="mx-auto flex h-full w-full max-w-[1240px] flex-col gap-3 p-2 sm:p-4 lg:flex-row lg:gap-3">
         <div className="flex w-full shrink-0 flex-col gap-3 lg:w-[380px]">
           <div
             ref={previewRef}
@@ -661,8 +648,8 @@ export default function WolvesvillePage() {
                 <ToolbarButton label="Nascondi" onClick={() => setHideUi(true)}>
                   <Eye size={22} />
                 </ToolbarButton>
-                <ToolbarButton label="Condividi" onClick={share}>
-                  <span className="text-lg">↗</span>
+                <ToolbarButton label="Scarica" onClick={() => void downloadPng()}>
+                  <Download size={22} className={downloading ? "animate-pulse" : ""} />
                 </ToolbarButton>
                 <ToolbarButton label="Impostazioni" onClick={() => setSettingsOpen((v) => !v)}>
                   <span className="relative flex">
@@ -726,37 +713,42 @@ export default function WolvesvillePage() {
                 </label>
 
                 <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
-                  <div className="mb-2 flex items-center justify-between text-xs">
-                    <span className="font-bold uppercase tracking-wider">
-                      Scala avatar
-                    </span>
-                    <span className="font-mono text-[var(--wov-accent)]">
-                      {avatarScale}%
-                    </span>
+                  <span className="text-xs font-bold uppercase tracking-wider">Sfondo</span>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-md bg-[var(--wov-tile)] py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125"
+                    >
+                      <ImagePlus size={14} />
+                      Carica immagine
+                    </button>
+                    {activeBg && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = { ...backgrounds };
+                          delete next[String(activeAvatar)];
+                          setBackgrounds(next);
+                        }}
+                        className="flex items-center justify-center gap-1 rounded-md bg-[var(--wov-tile)] px-2.5 py-1.5 text-xs font-bold text-[var(--wov-accent)] hover:brightness-125"
+                        aria-label="Rimuovi sfondo"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                   <input
-                    type="range"
-                    min={20}
-                    max={150}
-                    value={avatarScale}
-                    onChange={(e) => setAvatarScale(Number(e.target.value))}
-                    className="w-full accent-[var(--wov-accent)]"
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) pickBackground(file);
+                      e.target.value = "";
+                    }}
                   />
-                  <div className="mt-2 flex gap-1">
-                    {[50, 70, 85, 100].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setAvatarScale(preset)}
-                        className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-bold transition ${
-                          avatarScale === preset
-                            ? "bg-[var(--wov-accent)] text-white"
-                            : "bg-[var(--wov-tile)] text-[var(--wov-muted)] hover:brightness-125"
-                        }`}
-                      >
-                        {preset}%
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 <FilterSettings
@@ -808,65 +800,9 @@ export default function WolvesvillePage() {
               </div>
             )}
           </div>
-
-          <div className="rounded-md bg-[var(--wov-panel)] p-2">
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => void downloadPng()}
-                disabled={downloading}
-                className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125 disabled:opacity-60"
-              >
-                <Download size={14} className={downloading ? "animate-pulse" : ""} />
-                3x
-              </button>
-
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-text)] hover:brightness-125"
-              >
-                <ImagePlus size={14} />
-                Sfondo
-              </button>
-
-              {activeBg && (
-                <button
-                  onClick={() => {
-                    const next = { ...backgrounds };
-                    delete next[String(activeAvatar)];
-                    setBackgrounds(next);
-                  }}
-                  className="flex items-center gap-1 rounded-md bg-[var(--wov-tile)] px-3 py-1.5 text-xs font-bold text-[var(--wov-accent)] hover:brightness-125"
-                  aria-label="Rimuovi sfondo"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-
-            <p className="mt-1.5 text-center text-[10px] text-[var(--wov-muted)]">
-              3x qualità massima · PNG composto nel browser, con sfondo se selezionato.
-            </p>
-            {downloadError && (
-              <p role="alert" className="mt-2 text-center text-xs text-red-400">
-                {downloadError}
-              </p>
-            )}
-
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) pickBackground(file);
-                e.target.value = "";
-              }}
-            />
-          </div>
         </div>
 
-        <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-[var(--wov-panel)] lg:min-h-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-[var(--wov-panel)]">
           <div className="grid grid-cols-2">
             {(["avatar", "items"] as const).map((currentTab) => (
               <button

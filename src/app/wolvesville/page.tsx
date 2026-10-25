@@ -42,6 +42,7 @@ import {
 } from "@/lib/avatar-calibration";
 import { AvatarRenderError, renderAvatarBlob, type Density } from "@/lib/avatar-render";
 import { downloadBlob, downloadRemote } from "@/lib/save-image";
+import { CUSTOM_ID_PREFIX, CUSTOM_ITEMS, DEFAULT_SHIRT_ID } from "@/data/custom-items";
 import {
   COLOR_FILTERS,
   ORIGINS,
@@ -311,7 +312,7 @@ export default function WolvesvillePage() {
         force,
       );
 
-      setItems(catalog.items);
+      setItems([...CUSTOM_ITEMS, ...catalog.items]);
       setBodyPaints(catalog.bodyPaints);
       setTags(catalog.tags);
       setColorIndex(catalog.colorIndex);
@@ -334,7 +335,10 @@ export default function WolvesvillePage() {
           }
           if (!next.eyesId) next.eyesId = basic("EYES", "eyes-standard.store.png");
           if (!next.hairId) next.hairId = basic("HAIR", "hair-1.store.png");
-          if (!next.shirtId) next.shirtId = basic("SHIRT", "clothes-1.store.png");
+          if (!next.shirtId) {
+            const custom = CUSTOM_ITEMS.find((i) => i.id === DEFAULT_SHIRT_ID);
+            next.shirtId = custom?.id ?? basic("SHIRT", "clothes-1.store.png");
+          }
           return next;
         });
       }
@@ -576,7 +580,10 @@ export default function WolvesvillePage() {
       const pickDefault = (type: string) =>
         (items.find((i) => i.type === type && i.rarity === "COMMON") ??
           items.find((i) => i.type === type))?.id ?? null;
-      const apiSlots: WovAvatarSlots = { ...slots };
+      // L'API conosce solo gli item di Wolvesville: quelli personalizzati si tolgono
+      const apiSlots: WovAvatarSlots = Object.fromEntries(
+        Object.entries(slots).map(([k, v]) => [k, v?.startsWith(CUSTOM_ID_PREFIX) ? null : v]),
+      );
       if (!apiSlots.eyesId) apiSlots.eyesId = pickDefault("EYES");
       if (!apiSlots.gravestoneId) apiSlots.gravestoneId = pickDefault("GRAVESTONE");
 

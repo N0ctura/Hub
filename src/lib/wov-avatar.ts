@@ -126,8 +126,18 @@ export function buildAvatarLayers(
 
   const pushItem = (key: string, slotKey: string, z: number) => {
     const id = slots[slotKey];
-    const url = itemLayerUrlIf(getItemStoreUrl(id), density);
-    if (url) layers.push({ key, url, z, kind: "item", itemId: id ?? undefined });
+    const storeUrl = getItemStoreUrl(id);
+    const url = itemLayerUrlIf(storeUrl, density);
+    if (!url) return;
+    layers.push({
+      key,
+      url,
+      z,
+      kind: "item",
+      itemId: id ?? undefined,
+      // Item personalizzati: un solo file, sempre alla sua densita' reale (2)
+      ...(isCustomUrl(storeUrl) ? { density: 2 as const } : {}),
+    });
   };
   const pushBody = (key: string, url: string, z: number) => {
     layers.push({
@@ -178,9 +188,15 @@ export function buildAvatarLayers(
   return layers;
 }
 
+/** Item personalizzato: PNG locale in public/custom/ (non passa dal CDN di Wolvesville). */
+function isCustomUrl(url: string | undefined): boolean {
+  return !!url && !/^https?:/i.test(url) && url.includes("/custom/");
+}
+
 function itemLayerUrlIf(
   storeUrl: string | undefined,
   density: 1 | 2 | 3,
 ): string | undefined {
-  return storeUrl ? itemLayerUrl(storeUrl, density) : undefined;
+  if (!storeUrl) return undefined;
+  return isCustomUrl(storeUrl) ? storeUrl : itemLayerUrl(storeUrl, density);
 }

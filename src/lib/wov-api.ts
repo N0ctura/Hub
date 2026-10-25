@@ -5,14 +5,14 @@ export type WovItemType =
   | "HAIR"
   | "HAT"
   | "GLASSES"
-  | "GRAVESTONE"
+  | "EYES"
+  | "MOUTH"
+  | "MASK"
+  | "BADGE"
   | "FRONT"
   | "BACK"
-  | "EYES"
-  | "BADGE"
-  | "MASK"
-  | "MOUTH"
-  | "LEGS";
+  | "LEGS"
+  | "GRAVESTONE";
 
 export type WovRarity = "COMMON" | "RARE" | "EPIC" | "LEGENDARY" | "MYTHICAL";
 

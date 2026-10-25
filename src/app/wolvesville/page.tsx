@@ -10,6 +10,7 @@ import {
   ImagePlus,
   RefreshCw,
   Search,
+  LayoutGrid,
   Settings,
   SlidersHorizontal,
   Trash2,
@@ -166,14 +167,11 @@ export default function WolvesvillePage() {
   const activeAvatar = 0;
   const [backgrounds, setBackgrounds] = usePersisted<Record<string, string>>("wov_backgrounds", {});
   const [avatarScale] = usePersisted("wov_avatar_scale", 100);
+  const [gridCols, setGridCols] = usePersisted("wov_grid_cols", 4);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const defaultsApplied = useRef(false);
-  // Strumento "codice item": con l'interruttore attivo, toccare un item mostra il suo ID
-  // invece di equipaggiarlo.
-  const [inspectMode, setInspectMode] = useState(false);
-  const [inspected, setInspected] = useState<AnyItem | null>(null);
 
   // --- calibrazione / menu dev -------------------------------------------
   const [calibration, setCalibrationState] = useState<AvatarCalibration>(DEFAULT_CALIBRATION);
@@ -515,12 +513,6 @@ export default function WolvesvillePage() {
     }
   };
 
-  /** Click su un item: in modalita' "codice" lo mostra, altrimenti lo equipaggia. */
-  const clickItem = (item: AnyItem, equip: () => void) => {
-    if (inspectMode) setInspected(item);
-    else equip();
-  };
-
   const copyCurrentIds = () => {
     const ids = Object.fromEntries(Object.entries(slots).filter(([, id]) => !!id));
     void copyText(JSON.stringify(ids, null, 2), "ID dell'avatar copiati");
@@ -617,11 +609,11 @@ export default function WolvesvillePage() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--wov-page)] font-sans text-[var(--wov-text)]">
-      <div className="mx-auto flex h-full w-full max-w-[1240px] flex-col gap-3 p-2 sm:p-4 lg:flex-row lg:gap-3">
-        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-[380px]">
+      <div className="mx-auto flex h-full w-full max-w-[1240px] flex-col gap-0 p-0 sm:gap-3 sm:p-4 lg:flex-row lg:gap-3">
+        <div className="flex w-full shrink-0 flex-col gap-0 lg:w-[380px]">
           <div
             ref={previewRef}
-            className="relative aspect-[380/343] w-full overflow-hidden rounded-md bg-[var(--wov-sky)]"
+            className="relative aspect-[380/270] w-full overflow-hidden sm:aspect-[380/343] sm:rounded-md bg-[var(--wov-sky)]"
           >
             {activeBg ? (
               <img
@@ -643,7 +635,7 @@ export default function WolvesvillePage() {
             />
 
             {!hideUi && (
-              <div className="absolute left-0 top-0 z-20 flex items-center gap-1 rounded-br-md bg-[var(--wov-toolbar)] px-2 py-1.5">
+              <div className="absolute left-0 top-0 z-20 flex items-center gap-1 rounded-br-md bg-[var(--wov-toolbar)] px-1.5 py-1 sm:px-2 sm:py-1.5">
                 <ToolbarButton label="Torna all'Hub" asLink />
                 <ToolbarButton label="Nascondi" onClick={() => setHideUi(true)}>
                   <Eye size={22} />
@@ -712,7 +704,7 @@ export default function WolvesvillePage() {
                   />
                 </label>
 
-                <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
+                <div className="mt-2 border-t border-[var(--wov-panel-2)] pt-2">
                   <span className="text-xs font-bold uppercase tracking-wider">Sfondo</span>
                   <div className="mt-3 flex items-center gap-2">
                     <button
@@ -766,20 +758,8 @@ export default function WolvesvillePage() {
                   onOrigin={setSelectedOrigin}
                 />
 
-                <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
+                <div className="mt-2 border-t border-[var(--wov-panel-2)] pt-2">
                   <span className="text-xs font-bold uppercase tracking-wider">Codici item</span>
-                  <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-sm">
-                    <span>Tocca un item per vedere il codice</span>
-                    <input
-                      type="checkbox"
-                      checked={inspectMode}
-                      onChange={(e) => {
-                        setInspectMode(e.target.checked);
-                        setInspected(null);
-                      }}
-                      className="h-4 w-4 accent-[var(--wov-accent)]"
-                    />
-                  </label>
                   <button
                     type="button"
                     onClick={copyCurrentIds}
@@ -802,13 +782,13 @@ export default function WolvesvillePage() {
           </div>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-[var(--wov-panel)]">
-          <div className="grid grid-cols-2">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:rounded-md bg-[var(--wov-panel)]">
+          <div className="grid grid-cols-2 bg-[var(--wov-panel-2)] sm:bg-transparent border-b border-[var(--wov-panel-2)] sm:border-0">
             {(["avatar", "items"] as const).map((currentTab) => (
               <button
                 key={currentTab}
                 onClick={() => setTab(currentTab)}
-                className={`py-2.5 text-[11px] font-bold uppercase tracking-wide ${
+                className={`py-1.5 text-[11px] font-bold uppercase tracking-wide sm:py-2.5 ${
                   tab === currentTab
                     ? "text-[var(--wov-text)]"
                     : "text-[var(--wov-muted)]"
@@ -833,7 +813,7 @@ export default function WolvesvillePage() {
             </div>
           ) : tab === "avatar" ? (
             <>
-              <div className="wov-scroll flex shrink-0 items-center justify-between gap-1 overflow-x-auto bg-[var(--wov-panel-2)] px-2 py-1">
+              <div className="wov-scroll flex shrink-0 items-center justify-between gap-1 overflow-x-auto bg-[var(--wov-panel-2)] px-2 py-1 sm:py-1">
                 {visibleCats.map((category) => (
                   <button
                     key={category.key}
@@ -842,12 +822,12 @@ export default function WolvesvillePage() {
                       setSearch("");
                     }}
                     aria-label={category.key}
-                    className="relative flex h-9 min-w-9 flex-1 items-center justify-center"
+                    className="relative flex h-8 min-w-8 flex-1 items-center justify-center sm:h-9 sm:min-w-9"
                   >
                     <img
                       src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/wov-icons/${category.icon}`}
                       alt=""
-                      className={`h-5 w-auto max-w-7 object-contain transition ${
+                      className={`h-4 w-auto max-w-7 object-contain sm:h-5 transition ${
                         cat === category.key
                           ? "opacity-100 brightness-150"
                           : "opacity-40"
@@ -930,7 +910,7 @@ export default function WolvesvillePage() {
                         Caricamento item Wolvesville...
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9">
+                      <div className={`grid gap-1 sm:gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9 ${gridCols === 3 ? "grid-cols-3" : gridCols === 5 ? "grid-cols-5" : gridCols === 6 ? "grid-cols-6" : "grid-cols-4"}`}>
                         {!activeCategory.isBodyPaint && (
                           <button
                             type="button"
@@ -956,7 +936,7 @@ export default function WolvesvillePage() {
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => clickItem(item, () => equipInCategory(activeCategory, item))}
+                              onClick={() => equipInCategory(activeCategory, item)}
                               className={`relative flex aspect-[86/68] items-center justify-center rounded-lg border-2 bg-[var(--wov-tile)] p-1.5 transition-all ${
                                 selected
                                   ? "border-green-500 ring-2 ring-green-500/30"
@@ -1040,7 +1020,7 @@ export default function WolvesvillePage() {
                   : `${catalogItems.length} oggetti in ${TYPE_LABELS[itemType].toLowerCase()}`}
               </p>
 
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9">
+              <div className={`grid gap-1 sm:gap-1.5 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-9 ${gridCols === 3 ? "grid-cols-3" : gridCols === 5 ? "grid-cols-5" : gridCols === 6 ? "grid-cols-6" : "grid-cols-4"}`}>
                 {catalogItems.map((item) => {
                   const meta = RARITY_META[item.rarity];
 
@@ -1048,7 +1028,7 @@ export default function WolvesvillePage() {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => clickItem(item, () => equipItem(item))}
+                      onClick={() => equipItem(item)}
                       title={`${itemTitle(item)} · ${item.id}`}
                       className={`relative flex aspect-[86/68] items-center justify-center rounded-lg border-2 bg-[var(--wov-tile)] p-1.5 hover:brightness-125 ${meta.border}`}
                     >
@@ -1065,35 +1045,6 @@ export default function WolvesvillePage() {
           )}
         </div>
       </div>
-
-      {inspected && (
-        <div
-          role="status"
-          className="fixed bottom-3 left-1/2 z-[70] flex w-[calc(100vw-1.5rem)] max-w-xs -translate-x-1/2 items-center gap-2 rounded-lg border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-2.5 shadow-2xl"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] text-[var(--wov-muted)]">{itemTitle(inspected)}</p>
-            <p className="select-all font-mono text-base font-bold leading-tight text-[var(--wov-text)]">
-              {inspected.id}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void copyText(inspected.id, `Codice ${inspected.id} copiato`)}
-            className="rounded-md bg-[var(--wov-accent)] px-3 py-1.5 text-xs font-bold text-white"
-          >
-            Copia
-          </button>
-          <button
-            type="button"
-            aria-label="Chiudi"
-            onClick={() => setInspected(null)}
-            className="text-[var(--wov-muted)]"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
 
       {devEnabled && devOpen && (
         <DevCalibrationPanel
@@ -1136,7 +1087,7 @@ function FilterSettings({
     "rounded border border-[var(--wov-tile-border)] bg-[var(--wov-tile)] px-1.5 py-1 text-xs text-[var(--wov-text)] outline-none";
 
   return (
-    <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
+    <div className="mt-2 border-t border-[var(--wov-panel-2)] pt-2">
       <span className="text-xs font-bold uppercase tracking-wider">Mostra, filtra e ordina</span>
 
       <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-sm">

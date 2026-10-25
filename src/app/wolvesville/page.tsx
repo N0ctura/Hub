@@ -8,11 +8,9 @@ import {
   EyeOff,
   Home,
   ImagePlus,
-  Plus,
   RefreshCw,
   Search,
   Settings,
-  Shuffle,
   SlidersHorizontal,
   Trash2,
   X,
@@ -43,7 +41,13 @@ import {
   type AvatarCalibration,
 } from "@/lib/avatar-calibration";
 import { AvatarRenderError, renderAvatarBlob, type Density } from "@/lib/avatar-render";
-import { downloadBlob, isAppleTouchDevice, shareBlob } from "@/lib/save-image";
+import { downloadBlob, downloadRemote } from "@/lib/save-image";
+import {
+  COLOR_FILTERS,
+  ORIGINS,
+  originsOf,
+  type FilterTag,
+} from "@/lib/wov-filters";
 import {
   DevCalibrationPanel,
   type NaturalSize,
@@ -100,31 +104,6 @@ const ITEM_TYPES: WovItemType[] = [
   "GRAVESTONE",
 ];
 
-const COLOR_FILTERS = [
-  { key: "black", label: "Nero" },
-  { key: "blue", label: "Blu" },
-  { key: "brown", label: "Marrone" },
-  { key: "gray", label: "Grigio" },
-  { key: "green", label: "Verde" },
-  { key: "multicolor", label: "Multicolore" },
-  { key: "orange", label: "Arancione" },
-  { key: "pink", label: "Rosa" },
-  { key: "purple", label: "Viola" },
-  { key: "red", label: "Rosso" },
-  { key: "white", label: "Bianco" },
-  { key: "yellow", label: "Giallo" },
-] as const;
-
-interface SaveSheetState {
-  /** blob locale pronto da salvare (canvas o fetch riuscito) */
-  objectUrl?: string;
-  blob?: Blob;
-  /** immagine remota mostrabile ma non scaricabile (CORS): salvataggio manuale */
-  remoteUrl?: string;
-  fileName: string;
-  note?: string;
-}
-
 function usePersisted<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial);
 
@@ -164,6 +143,9 @@ export default function WolvesvillePage() {
   const [cat, setCat] = useState("hat");
   const [search, setSearch] = useState("");
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null);
+  const [filterTag, setFilterTag] = useState<FilterTag>("all");
+  const [legendaryFirst, setLegendaryFirst] = usePersisted("wov_legendary_first", false);
   const [itemType, setItemType] = useState<WovItemType>("SHIRT");
   const [rarity, setRarity] = useState<string | null>(null);
 
@@ -179,8 +161,8 @@ export default function WolvesvillePage() {
   const [hideUi, setHideUi] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [moonlight, setMoonlight] = usePersisted("wov_moonlight_v2", true);
-  const [avatars, setAvatars] = usePersisted<number[]>("wov_avatars", [0]);
-  const [activeAvatar, setActiveAvatar] = usePersisted("wov_active_avatar", 0);
+  // Un solo avatar: lo sfondo resta salvato con la stessa chiave di prima ("0")
+  const activeAvatar = 0;
   const [backgrounds, setBackgrounds] = usePersisted<Record<string, string>>("wov_backgrounds", {});
   const [avatarScale, setAvatarScale] = usePersisted("wov_avatar_scale", 100);
 
@@ -195,7 +177,6 @@ export default function WolvesvillePage() {
   const [naturals, setNaturals] = useState<Record<string, NaturalSize>>({});
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [saveSheet, setSaveSheet] = useState<SaveSheetState | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_WOV_API_KEY?.trim() ?? "";
 
   const setCalibration = useCallback((next: AvatarCalibration) => {
@@ -216,13 +197,6 @@ export default function WolvesvillePage() {
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    // libera l'URL del blob del pannello "salva" quando si chiude
-    return () => {
-      if (saveSheet?.objectUrl) URL.revokeObjectURL(saveSheet.objectUrl);
-    };
-  }, [saveSheet]);
 
   const visibleCats = CATEGORIES.filter((c) => moonlight || !c.second);
   const activeBg = backgrounds[String(activeAvatar)];
@@ -281,6 +255,26 @@ export default function WolvesvillePage() {
   const selectedColorIds = useMemo(
     () => new Set(selectedColor ? colorIndex[selectedColor] ?? [] : []),
     [colorIndex, selectedColor],
+  );
+
+  /** Un id supera i filtri attivi (colore + origine)? */
+  const passesFilters = useCallback(
+    (id: string) => {
+      if (selectedColor && !selectedColorIds.has(id)) return false;
+      if (selectedOrigin) {
+        const item = itemMap[id];
+        if (!item || !originsOf(item, tags[id]).includes(selectedOrigin)) return false;
+      }
+      return true;
+    },
+    [selectedColor, selectedColorIds, selectedOrigin, itemMap, tags],
+  );
+  const filtersActive = !!selectedColor || !!selectedOrigin;
+
+  const rankOf = useCallback(
+    (item: AnyItem) =>
+      legendaryFirst && (item.rarity === "LEGENDARY" || item.rarity === "MYTHICAL") ? 0 : 1,
+    [legendaryFirst],
   );
 
   const layers = layerSets[2];
@@ -363,23 +357,25 @@ export default function WolvesvillePage() {
       });
     }
 
-    if (selectedColor) {
-      base = base.filter((item) => selectedColorIds.has(item.id));
+    if (filtersActive) {
+      base = base.filter((item) => passesFilters(item.id));
     }
 
-    return [...base].sort((a, b) =>
-      itemTitle(a).localeCompare(itemTitle(b), undefined, { sensitivity: "base" }),
+    return [...base].sort(
+      (a, b) =>
+        rankOf(a) - rankOf(b) ||
+        itemTitle(a).localeCompare(itemTitle(b), undefined, { sensitivity: "base" }),
     );
-  }, [activeCategory, bodyPaints, items, search, selectedColor, selectedColorIds, tags]);
+  }, [activeCategory, bodyPaints, items, search, filtersActive, passesFilters, rankOf, tags]);
 
   const categorySkinPacks = useMemo(() => {
     if (!activeCategory.isSkinPack) return [];
     const q = search.trim().toLowerCase();
-    const base = resolvedPacks.filter(({ pack, label }) => {
+    const base = resolvedPacks.filter(({ pack, packSlots, label }) => {
       if (
-        selectedColor &&
-        !Object.values(pack.slots).some((id) => id && selectedColorIds.has(id)) &&
-        !pack.itemIds.some((id) => selectedColorIds.has(id))
+        filtersActive &&
+        !Object.values(packSlots).some((id) => id && passesFilters(id)) &&
+        !pack.itemIds.some((id) => passesFilters(id))
       ) {
         return false;
       }
@@ -393,7 +389,7 @@ export default function WolvesvillePage() {
     return [...base].sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
     );
-  }, [activeCategory, search, resolvedPacks, selectedColor, selectedColorIds]);
+  }, [activeCategory, search, resolvedPacks, filtersActive, passesFilters]);
 
   const equipSkinPack = (pack: WovSkinPack, packSlots: WovAvatarSlots, label: string) => {
     if (!Object.values(packSlots).some(Boolean)) {
@@ -418,9 +414,7 @@ export default function WolvesvillePage() {
     return items
       .filter((item) => item.type === itemType)
       .filter((item) => (rarity ? item.rarity === rarity : true))
-      .filter((item) =>
-        selectedColor ? selectedColorIds.has(item.id) : true,
-      )
+      .filter((item) => (filtersActive ? passesFilters(item.id) : true))
       .filter((item) => {
         if (!q) return true;
 
@@ -433,8 +427,9 @@ export default function WolvesvillePage() {
           item.id.toLowerCase().includes(q) ||
           tagMatch
         );
-      });
-  }, [items, itemType, rarity, search, selectedColor, selectedColorIds, tags]);
+      })
+      .sort((a, b) => rankOf(a) - rankOf(b));
+  }, [items, itemType, rarity, search, filtersActive, passesFilters, rankOf, tags]);
 
   const equipItem = (item: AnyItem) => {
     if ("type" in item) {
@@ -502,19 +497,8 @@ export default function WolvesvillePage() {
     setDownloading(true);
     setDownloadError(null);
 
-    // Consegna del file: su iPhone/iPad serve un gesto utente fresco -> pannello "Salva"
-    const deliver = (blob: Blob, w?: number, h?: number) => {
-      if (isAppleTouchDevice()) {
-        setSaveSheet({
-          objectUrl: URL.createObjectURL(blob),
-          blob,
-          fileName,
-          note: w && h ? `${w}×${h}px` : undefined,
-        });
-      } else {
-        downloadBlob(blob, fileName);
-      }
-    };
+    // Il download parte subito, senza anteprima intermedia (anche su iPhone/iPad)
+    const deliver = (blob: Blob) => downloadBlob(blob, fileName);
 
     let canvasFailure = "";
     try {
@@ -527,7 +511,7 @@ export default function WolvesvillePage() {
       if (result.skipped.length) {
         throw new Error(`${result.skipped.length} layer non caricati dal CDN.`);
       }
-      deliver(result.blob, result.width, result.height);
+      deliver(result.blob);
       setDownloading(false);
       return;
     } catch (renderError) {
@@ -562,24 +546,7 @@ export default function WolvesvillePage() {
         /\.png(?=$|[?#])/i,
         `@${density}x.png`,
       );
-      try {
-        const response = await fetch(imageUrl);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        deliver(
-          blob,
-          shared.avatar.width * density,
-          shared.avatar.height * density,
-        );
-      } catch {
-        setSaveSheet({
-          remoteUrl: imageUrl,
-          fileName,
-          note: activeBg
-            ? "Rendering ufficiale; lo sfondo importato non viene applicato"
-            : "Rendering ufficiale Wolvesville",
-        });
-      }
+      await downloadRemote(imageUrl, fileName);
     } catch (apiError) {
       const detail =
         apiError instanceof Error ? apiError.message : String(apiError);
@@ -637,7 +604,12 @@ export default function WolvesvillePage() {
                   <span className="text-lg">↗</span>
                 </ToolbarButton>
                 <ToolbarButton label="Impostazioni" onClick={() => setSettingsOpen((v) => !v)}>
-                  <Settings size={22} />
+                  <span className="relative flex">
+                    <Settings size={22} />
+                    {filtersActive && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--wov-accent)]" />
+                    )}
+                  </span>
                 </ToolbarButton>
                 {devEnabled && (
                   <ToolbarButton label="Calibrazione DEV" onClick={() => setDevOpen((v) => !v)}>
@@ -715,6 +687,21 @@ export default function WolvesvillePage() {
                     ))}
                   </div>
                 </div>
+
+                <FilterSettings
+                  legendaryFirst={legendaryFirst}
+                  onLegendaryFirst={setLegendaryFirst}
+                  filterTag={filterTag}
+                  onFilterTag={(tag) => {
+                    setFilterTag(tag);
+                    setSelectedColor(null);
+                    setSelectedOrigin(null);
+                  }}
+                  selectedColor={selectedColor}
+                  onColor={setSelectedColor}
+                  selectedOrigin={selectedOrigin}
+                  onOrigin={setSelectedOrigin}
+                />
               </div>
             )}
           </div>
@@ -773,58 +760,6 @@ export default function WolvesvillePage() {
                 e.target.value = "";
               }}
             />
-          </div>
-
-          <div className="relative flex min-h-[200px] flex-col rounded-md bg-[var(--wov-panel)] lg:flex-1 lg:min-h-0">
-            <p className="pt-2 text-center text-xs font-bold">Avatars</p>
-
-            <button
-              aria-label="Avatar casuale"
-              className="absolute right-0 top-0 rounded-bl-md bg-[var(--wov-toolbar)] p-1.5"
-              onClick={() =>
-                setActiveAvatar(
-                  avatars[Math.floor(Math.random() * avatars.length)] ?? 0,
-                )
-              }
-            >
-              <Shuffle size={14} />
-            </button>
-
-            <div className="wov-scroll grid flex-1 grid-cols-3 content-start gap-x-6 gap-y-3 overflow-y-auto px-6 py-3 lg:px-8">
-              {avatars.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveAvatar(id)}
-                  className={`relative aspect-square overflow-hidden rounded-lg border-2 bg-[var(--wov-sky)] ${
-                    activeAvatar === id
-                      ? "border-[var(--wov-selected)]"
-                      : "border-[var(--wov-tile-border)]"
-                  }`}
-                >
-                  {backgrounds[String(id)] ? (
-                    <img
-                      src={backgrounds[String(id)]}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                  ) : (
-                    <NightScene mini />
-                  )}
-                </button>
-              ))}
-
-              <button
-                onClick={() => {
-                  const next = Math.max(...avatars, -1) + 1;
-                  setAvatars([...avatars, next]);
-                  setActiveAvatar(next);
-                }}
-                className="flex aspect-square flex-col items-center justify-center rounded-lg bg-[var(--wov-tile)] text-[var(--wov-muted)]"
-                aria-label="Nuovo avatar"
-              >
-                <Plus size={30} />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -911,13 +846,6 @@ export default function WolvesvillePage() {
                   <RefreshCw size={14} className={loadingData ? "animate-spin" : ""} />
                 </button>
               </div>
-
-              {!activeCategory.isBodyPaint && (
-                <ColorFilterBar
-                  selectedColor={selectedColor}
-                  onSelect={setSelectedColor}
-                />
-              )}
 
               <div className="wov-scroll flex-1 overflow-y-auto p-1">
                 {activeCategory.isSkinPack ? (
@@ -1091,11 +1019,6 @@ export default function WolvesvillePage() {
                 </select>
               </div>
 
-              <ColorFilterBar
-                selectedColor={selectedColor}
-                onSelect={setSelectedColor}
-              />
-
               <p className="mb-2 text-center text-[10px] text-[var(--wov-muted)]">
                 {loadingData
                   ? "Caricamento catalogo..."
@@ -1141,50 +1064,103 @@ export default function WolvesvillePage() {
         />
       )}
 
-      {saveSheet && <SaveSheet sheet={saveSheet} onClose={() => setSaveSheet(null)} />}
     </div>
   );
 }
 
-function ColorFilterBar({
+/** Sezione "Mostra, filtra e ordina" dentro le impostazioni (come nel pannello di Wolvesville). */
+function FilterSettings({
+  legendaryFirst,
+  onLegendaryFirst,
+  filterTag,
+  onFilterTag,
   selectedColor,
-  onSelect,
+  onColor,
+  selectedOrigin,
+  onOrigin,
 }: {
+  legendaryFirst: boolean;
+  onLegendaryFirst: (v: boolean) => void;
+  filterTag: FilterTag;
+  onFilterTag: (tag: FilterTag) => void;
   selectedColor: string | null;
-  onSelect: (color: string | null) => void;
+  onColor: (color: string | null) => void;
+  selectedOrigin: string | null;
+  onOrigin: (origin: string | null) => void;
 }) {
+  const selectCls =
+    "rounded border border-[var(--wov-tile-border)] bg-[var(--wov-tile)] px-1.5 py-1 text-xs text-[var(--wov-text)] outline-none";
+
   return (
-    <div
-      aria-label="Filtra per colore"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--wov-panel-2)] px-2 py-1.5"
-    >
-      <button
-        type="button"
-        onClick={() => onSelect(null)}
-        aria-pressed={selectedColor === null}
-        className={`shrink-0 rounded px-2 py-1 text-[9px] font-bold ${
-          selectedColor === null
-            ? "bg-[var(--wov-accent)] text-white"
-            : "bg-[var(--wov-tile)] text-[var(--wov-muted)]"
-        }`}
-      >
-        Tutti
-      </button>
-      {COLOR_FILTERS.map(({ key, label }) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => onSelect(selectedColor === key ? null : key)}
-          aria-pressed={selectedColor === key}
-          className={`shrink-0 rounded px-2 py-1 text-[9px] font-bold ${
-            selectedColor === key
-              ? "bg-[var(--wov-accent)] text-white"
-              : "bg-[var(--wov-tile)] text-[var(--wov-muted)]"
-          }`}
+    <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
+      <span className="text-xs font-bold uppercase tracking-wider">Mostra, filtra e ordina</span>
+
+      <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-sm">
+        <span>Mostra prima i leggendari</span>
+        <input
+          type="checkbox"
+          checked={legendaryFirst}
+          onChange={(e) => onLegendaryFirst(e.target.checked)}
+          className="h-4 w-4 accent-[var(--wov-accent)]"
+        />
+      </label>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="font-bold text-[var(--wov-muted)]">Filtra per tag:</span>
+        <select
+          aria-label="Filtra per tag"
+          value={filterTag}
+          onChange={(e) => onFilterTag(e.target.value as FilterTag)}
+          className={selectCls}
         >
-          {label}
-        </button>
-      ))}
+          <option value="all">Tutti gli item</option>
+          <option value="color">Colore</option>
+          <option value="origin">Origine</option>
+        </select>
+
+        {filterTag === "origin" && (
+          <>
+            <span className="text-[var(--wov-muted)]">&gt;</span>
+            <select
+              aria-label="Filtra per origine"
+              value={selectedOrigin ?? ""}
+              onChange={(e) => onOrigin(e.target.value || null)}
+              className={`${selectCls} min-w-0 max-w-full flex-1`}
+            >
+              <option value="">Scegli un&apos;origine...</option>
+              {ORIGINS.map(({ key, label }) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+      </div>
+
+      {filterTag === "color" && (
+        <div className="mt-2 grid grid-cols-3 gap-1.5" role="group" aria-label="Filtra per colore">
+          {COLOR_FILTERS.map(({ key, label, bg, fg }) => {
+            const active = selectedColor === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onColor(active ? null : key)}
+                aria-pressed={active}
+                style={active ? { background: bg, color: fg, borderColor: "transparent" } : undefined}
+                className={`rounded-full border px-2 py-1 text-[11px] font-bold transition ${
+                  active
+                    ? "shadow-md"
+                    : "border-[var(--wov-tile-border)] bg-[var(--wov-tile)] text-[var(--wov-muted)] hover:brightness-125"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1363,69 +1339,6 @@ function WovLayer({
   );
 }
 
-function SaveSheet({ sheet, onClose }: { sheet: SaveSheetState; onClose: () => void }) {
-  const src = sheet.objectUrl ?? sheet.remoteUrl ?? "";
-
-  const onSave = async () => {
-    if (!sheet.blob) return;
-    // Gesto utente fresco: qui il foglio di condivisione di iOS funziona ("Salva immagine")
-    const result = await shareBlob(sheet.blob, sheet.fileName);
-    if (result === "unsupported") {
-      downloadBlob(sheet.blob, sheet.fileName);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Salva immagine"
-    >
-      <div
-        className="flex max-h-full w-full max-w-sm flex-col gap-3 rounded-lg bg-[var(--wov-panel)] p-3 text-[var(--wov-text)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider">Salva immagine</span>
-          <button aria-label="Chiudi" onClick={onClose} className="text-[var(--wov-muted)]">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto rounded-md bg-[var(--wov-sky)] p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="Avatar pronto" className="mx-auto max-h-[55vh] w-auto object-contain" />
-        </div>
-
-        {sheet.blob ? (
-          <button
-            onClick={() => void onSave()}
-            className="flex items-center justify-center gap-2 rounded-md bg-[var(--wov-accent)] py-2.5 text-sm font-bold text-white"
-          >
-            <Download size={16} /> Salva / Condividi
-          </button>
-        ) : (
-          <a
-            href={sheet.remoteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-md bg-[var(--wov-accent)] py-2.5 text-sm font-bold text-white"
-          >
-            Apri immagine
-          </a>
-        )}
-
-        <p className="text-center text-[10px] text-[var(--wov-muted)]">
-          {sheet.note ? `${sheet.note} · ` : ""}Su iPhone/iPad puoi anche tenere premuto
-          sull&apos;immagine e scegliere «Salva in Foto».
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function ToolbarButton({
   label,
   onClick,
@@ -1455,7 +1368,7 @@ function ToolbarButton({
   );
 }
 
-function NightScene({ mini }: { mini?: boolean }) {
+function NightScene() {
   return (
     <svg
       viewBox="0 0 380 343"
@@ -1464,8 +1377,7 @@ function NightScene({ mini }: { mini?: boolean }) {
     >
       <rect width="380" height="343" fill="var(--wov-sky)" />
 
-      {!mini &&
-        [
+      {[
           [140, 12],
           [210, 30],
           [300, 18],

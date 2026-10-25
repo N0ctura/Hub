@@ -168,6 +168,11 @@ export default function WolvesvillePage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const defaultsApplied = useRef(false);
+  // Strumento "codice item": con l'interruttore attivo, toccare un item mostra il suo ID
+  // invece di equipaggiarlo.
+  const [inspectMode, setInspectMode] = useState(false);
+  const [inspected, setInspected] = useState<AnyItem | null>(null);
 
   // --- calibrazione / menu dev -------------------------------------------
   const [calibration, setCalibrationState] = useState<AvatarCalibration>(DEFAULT_CALIBRATION);
@@ -312,13 +317,27 @@ export default function WolvesvillePage() {
       setColorIndex(catalog.colorIndex);
       setSkinPacks(catalog.skinPacks);
 
-      setSlots((prev) => {
-        if (prev.bodyPaintId) return prev;
-        const defaultPaint =
-          catalog.bodyPaints.find((p) => p.imageUrl.includes("skin-1")) ??
-          catalog.bodyPaints[0];
-        return defaultPaint ? { ...prev, bodyPaintId: defaultPaint.id } : prev;
-      });
+      // Avatar di partenza vestito: occhi, capelli e maglia base (solo al primo caricamento,
+      // cosi' "None" scelto dall'utente non viene riapplicato dopo un aggiornamento).
+      if (!defaultsApplied.current) {
+        defaultsApplied.current = true;
+        const basic = (type: string, file: string) =>
+          catalog.items.find((i) => i.type === type && i.imageUrl.endsWith(`/${file}`))?.id ??
+          null;
+        setSlots((prev) => {
+          const next = { ...prev };
+          if (!next.bodyPaintId) {
+            const paint =
+              catalog.bodyPaints.find((p) => p.imageUrl.includes("skin-1")) ??
+              catalog.bodyPaints[0];
+            if (paint) next.bodyPaintId = paint.id;
+          }
+          if (!next.eyesId) next.eyesId = basic("EYES", "eyes-standard.store.png");
+          if (!next.hairId) next.hairId = basic("HAIR", "hair-1.store.png");
+          if (!next.shirtId) next.shirtId = basic("SHIRT", "clothes-1.store.png");
+          return next;
+        });
+      }
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "Errore sconosciuto");
     } finally {
@@ -484,6 +503,26 @@ export default function WolvesvillePage() {
     reader.readAsDataURL(file);
   };
 
+  const copyText = async (text: string, okMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(okMessage);
+    } catch {
+      toast.error("Impossibile copiare: seleziona il testo a mano");
+    }
+  };
+
+  /** Click su un item: in modalita' "codice" lo mostra, altrimenti lo equipaggia. */
+  const clickItem = (item: AnyItem, equip: () => void) => {
+    if (inspectMode) setInspected(item);
+    else equip();
+  };
+
+  const copyCurrentIds = () => {
+    const ids = Object.fromEntries(Object.entries(slots).filter(([, id]) => !!id));
+    void copyText(JSON.stringify(ids, null, 2), "ID dell'avatar copiati");
+  };
+
   const downloadPng = async () => {
     if (downloading) return;
     const density: Density = 3;
@@ -630,7 +669,17 @@ export default function WolvesvillePage() {
             )}
 
             {settingsOpen && !hideUi && (
-              <div className="absolute left-2 top-12 z-30 max-h-[calc(100%-3.5rem)] w-[300px] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-3 shadow-xl">
+              <div
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3"
+                onClick={() => setSettingsOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Impostazioni"
+              >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="wov-scroll max-h-[calc(100dvh-1.5rem)] w-full max-w-[360px] overflow-y-auto overscroll-contain rounded-lg border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-4 shadow-2xl"
+              >
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider">
                     Impostazioni
@@ -702,6 +751,38 @@ export default function WolvesvillePage() {
                   selectedOrigin={selectedOrigin}
                   onOrigin={setSelectedOrigin}
                 />
+
+                <div className="mt-4 border-t border-[var(--wov-panel-2)] pt-3">
+                  <span className="text-xs font-bold uppercase tracking-wider">Codici item</span>
+                  <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-sm">
+                    <span>Tocca un item per vedere il codice</span>
+                    <input
+                      type="checkbox"
+                      checked={inspectMode}
+                      onChange={(e) => {
+                        setInspectMode(e.target.checked);
+                        setInspected(null);
+                      }}
+                      className="h-4 w-4 accent-[var(--wov-accent)]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={copyCurrentIds}
+                    className="mt-2 w-full rounded-md bg-[var(--wov-tile)] py-1.5 text-xs font-bold hover:brightness-125"
+                  >
+                    Copia gli ID dell&apos;avatar attuale
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(false)}
+                  className="mt-4 w-full rounded-md bg-[var(--wov-accent)] py-2 text-sm font-bold text-white"
+                >
+                  OK
+                </button>
+              </div>
               </div>
             )}
           </div>
@@ -823,30 +904,6 @@ export default function WolvesvillePage() {
                 ))}
               </div>
 
-              <div className="flex shrink-0 gap-2 border-b border-[var(--wov-panel-2)] p-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search
-                    size={14}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--wov-muted)]"
-                  />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={activeCategory.isSkinPack ? "Cerca pacchetti skin..." : `Cerca in ${activeCategory.key}...`}
-                    className="w-full rounded-md border border-[var(--wov-tile-border)] bg-[var(--wov-tile)] py-2 pl-8 pr-2 text-xs outline-none"
-                  />
-                </div>
-
-                <button
-                  onClick={() => void loadAll(true)}
-                  disabled={loadingData}
-                  className="rounded-md bg-[var(--wov-tile)] px-3 text-[var(--wov-text)]"
-                  title="Aggiorna item"
-                >
-                  <RefreshCw size={14} className={loadingData ? "animate-spin" : ""} />
-                </button>
-              </div>
-
               <div className="wov-scroll flex-1 overflow-y-auto p-1">
                 {activeCategory.isSkinPack ? (
                   <>
@@ -941,7 +998,7 @@ export default function WolvesvillePage() {
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => equipInCategory(activeCategory, item)}
+                              onClick={() => clickItem(item, () => equipInCategory(activeCategory, item))}
                               className={`relative flex aspect-[86/68] items-center justify-center rounded-lg border-2 bg-[var(--wov-tile)] p-1.5 transition-all ${
                                 selected
                                   ? "border-green-500 ring-2 ring-green-500/30"
@@ -1033,7 +1090,7 @@ export default function WolvesvillePage() {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => equipItem(item)}
+                      onClick={() => clickItem(item, () => equipItem(item))}
                       title={`${itemTitle(item)} · ${item.id}`}
                       className={`relative flex aspect-[86/68] items-center justify-center rounded-lg border-2 bg-[var(--wov-tile)] p-1.5 hover:brightness-125 ${meta.border}`}
                     >
@@ -1050,6 +1107,35 @@ export default function WolvesvillePage() {
           )}
         </div>
       </div>
+
+      {inspected && (
+        <div
+          role="status"
+          className="fixed bottom-3 left-1/2 z-[70] flex w-[calc(100vw-1.5rem)] max-w-xs -translate-x-1/2 items-center gap-2 rounded-lg border border-[var(--wov-panel-2)] bg-[var(--wov-panel)] p-2.5 shadow-2xl"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] text-[var(--wov-muted)]">{itemTitle(inspected)}</p>
+            <p className="select-all font-mono text-base font-bold leading-tight text-[var(--wov-text)]">
+              {inspected.id}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void copyText(inspected.id, `Codice ${inspected.id} copiato`)}
+            className="rounded-md bg-[var(--wov-accent)] px-3 py-1.5 text-xs font-bold text-white"
+          >
+            Copia
+          </button>
+          <button
+            type="button"
+            aria-label="Chiudi"
+            onClick={() => setInspected(null)}
+            className="text-[var(--wov-muted)]"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {devEnabled && devOpen && (
         <DevCalibrationPanel

@@ -31,7 +31,7 @@ import {
   type WovItemType,
   type WovSkinPack,
 } from "@/lib/wov-api";
-import { buildAvatarLayers, storeIconUrl, type WovLayerSpec } from "@/lib/wov-avatar";
+import { buildAvatarLayers, corsSafeUrl, storeIconUrl, type WovLayerSpec } from "@/lib/wov-avatar";
 import {
   DEFAULT_CALIBRATION,
   layerWidthFraction,
@@ -384,11 +384,11 @@ export default function WolvesvillePage() {
       base = base.filter((item) => passesFilters(item.id));
     }
 
-    return [...base].sort(
-      (a, b) =>
-        rankOf(a) - rankOf(b) ||
-        itemTitle(a).localeCompare(itemTitle(b), undefined, { sensitivity: "base" }),
-    );
+    // L'ordine ufficiale e' quello restituito dall'API (raggruppato per slug: le
+    // varianti dello stesso set, es. "eyes-female01/02", restano vicine).
+    // Array.sort e' stabile, quindi basta il confronto su rankOf: con "leggendari
+    // per primi" attivo i leggendari salgono, altrimenti l'ordine resta intatto.
+    return [...base].sort((a, b) => rankOf(a) - rankOf(b));
   }, [activeCategory, bodyPaints, items, search, filtersActive, passesFilters, rankOf, tags]);
 
   const categorySkinPacks = useMemo(() => {
@@ -595,13 +595,19 @@ export default function WolvesvillePage() {
       );
       if (!apiSlots.eyesId) apiSlots.eyesId = pickDefault("EYES");
       if (!apiSlots.gravestoneId) apiSlots.gravestoneId = pickDefault("GRAVESTONE");
+      // Verificato sull'API: servono SEMPRE sia la maglia sia il body paint,
+      // altrimenti risponde 400 "Required fields shirt or body paint are missing".
+      if (!apiSlots.shirtId) apiSlots.shirtId = pickDefault("SHIRT");
+      if (!apiSlots.bodyPaintId) apiSlots.bodyPaintId = bodyPaints[0]?.id ?? null;
 
       const shared = await createSharedAvatar(apiSlots, apiKey.trim());
       const imageUrl = shared.avatar.url.replace(
         /\.png(?=$|[?#])/i,
         `@${density}x.png`,
       );
-      await downloadRemote(imageUrl, fileName);
+      // Il PNG vive su cdn-avatars (nessun header CORS): per scaricarlo come blob
+      // va letto tramite il proxy, altrimenti il browser aprirebbe una nuova scheda.
+      await downloadRemote(corsSafeUrl(imageUrl), fileName);
     } catch (apiError) {
       const detail =
         apiError instanceof Error ? apiError.message : String(apiError);

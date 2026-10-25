@@ -13,7 +13,7 @@ import {
   resolveAdjust,
   type AvatarCalibration,
 } from "./avatar-calibration";
-import type { WovLayerSpec } from "./wov-avatar";
+import { corsSafeUrl, type WovLayerSpec } from "./wov-avatar";
 
 export type Density = 1 | 2 | 3;
 
@@ -87,10 +87,14 @@ function loadOnce(url: string): Promise<HTMLImageElement> {
  * dall'anteprima (<img> senza crossorigin) e rifiutarla per il canvas.
  */
 async function loadImageCors(url: string): Promise<HTMLImageElement> {
+  // corsSafeUrl instrada i file del CDN (che non invia header CORS) attraverso il
+  // proxy: senza di esso drawImage/toBlob bloccherebbero il canvas e il download
+  // usciva trasparente. In sviluppo l'URL e' gia' same-origin e resta invariato.
+  const safe = corsSafeUrl(url);
   try {
-    return await loadOnce(url);
+    return await loadOnce(safe);
   } catch {
-    return await loadOnce(withCacheBust(url));
+    return await loadOnce(withCacheBust(safe));
   }
 }
 

@@ -59,6 +59,31 @@ function avatarLayerUrl(path: string): string {
   return `https://cdn2.wolvesville.com/${path}`;
 }
 
+/**
+ * Proxy CORS per gli asset di Wolvesville.
+ *
+ * Il CDN (cdn2.wolvesville.com e cdn-avatars.wolvesville.com) NON invia header
+ * Access-Control-Allow-Origin. Senza di essi il browser non lascia leggere i pixel
+ * dei layer in un <canvas> (canvas "tainted") ne' scaricare il PNG di sharedAvatar
+ * con fetch(): il download restava trasparente/bloccato.
+ * wsrv.nl (images.weserv.nl) rimanda l'immagine aggiungendo "Access-Control-Allow-Origin: *"
+ * senza modificarne dimensioni ne' trasparenza.
+ * In sviluppo il proxy non serve: il rewrite /__wov-cdn di next.config.mjs
+ * serve gli stessi file same-origin.
+ */
+const CORS_PROXY_ORIGIN = "https://wsrv.nl/?url=";
+
+/** URL leggibile dal canvas: se e' cross-origin passa dal proxy CORS. */
+export function corsSafeUrl(url: string): string {
+  if (!/^https?:\/\//i.test(url)) return url;
+  try {
+    if (new URL(url).origin === window.location.origin) return url;
+  } catch {
+    return url;
+  }
+  return `${CORS_PROXY_ORIGIN}${encodeURIComponent(url)}`;
+}
+
 /** URL del layer avatar-large di un item, ricavato dalla store icon. */
 export function itemLayerUrl(storeUrl: string, density: 1 | 2 | 3 = 2): string {
   const slug = slugFromStoreUrl(storeUrl);

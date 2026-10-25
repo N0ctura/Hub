@@ -38,3 +38,7 @@ next-env.d.ts
 # Archives
 *.zip
 hunger-games-complete.zip
+# Python
+.venv/
+__pycache__/
+*.pyc

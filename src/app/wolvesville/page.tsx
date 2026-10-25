@@ -548,7 +548,16 @@ export default function WolvesvillePage() {
     }
 
     try {
-      const shared = await createSharedAvatar(slots, apiKey.trim());
+      // L'API (schema AddSharedAvatarRequest) richiede SEMPRE occhi e lapide: se non li hai
+      // scelti, usiamo quelli comuni del catalogo. La lapide non compare nell'immagine.
+      const pickDefault = (type: string) =>
+        (items.find((i) => i.type === type && i.rarity === "COMMON") ??
+          items.find((i) => i.type === type))?.id ?? null;
+      const apiSlots: WovAvatarSlots = { ...slots };
+      if (!apiSlots.eyesId) apiSlots.eyesId = pickDefault("EYES");
+      if (!apiSlots.gravestoneId) apiSlots.gravestoneId = pickDefault("GRAVESTONE");
+
+      const shared = await createSharedAvatar(apiSlots, apiKey.trim());
       const imageUrl = shared.avatar.url.replace(
         /\.png(?=$|[?#])/i,
         `@${density}x.png`,

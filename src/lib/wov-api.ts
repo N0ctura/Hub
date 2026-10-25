@@ -112,7 +112,15 @@ export async function createSharedAvatar(
     if (response.status === 429) {
       throw new Error("Limite API Wolvesville raggiunto. Riprova più tardi.");
     }
-    throw new Error(`API Wolvesville non disponibile (${response.status}).`);
+    let detail = "";
+    try {
+      detail = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 240);
+    } catch {
+      /* corpo non leggibile */
+    }
+    throw new Error(
+      `API Wolvesville ha risposto ${response.status}${detail ? `: ${detail}` : "."}`,
+    );
   }
 
   const result: unknown = await response.json();

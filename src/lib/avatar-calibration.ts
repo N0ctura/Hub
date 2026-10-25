@@ -10,6 +10,7 @@
 //   dx, dy = % della LARGHEZZA del quadrato avatar (dy > 0 sposta verso l'alto)
 
 import defaultsJson from "@/data/avatar-calibration.default.json";
+import { CUSTOM_DEFAULT_ADJUST } from "@/data/custom-items";
 
 export interface Adjust {
   scale: number;
@@ -210,7 +211,9 @@ export interface LayerIdentity {
 export function resolveAdjust(cal: AvatarCalibration, layer: LayerIdentity): Adjust {
   const g = layer.kind === "body" ? cal.body : cal.items;
   const l = cal.layers[layer.key] ?? NEUTRAL;
-  const o = (layer.itemId && cal.overrides[layer.itemId]) || NEUTRAL;
+  const o =
+    (layer.itemId && (cal.overrides[layer.itemId] ?? CUSTOM_DEFAULT_ADJUST[layer.itemId])) ||
+    NEUTRAL;
   return {
     scale: g.scale * l.scale * o.scale,
     dx: g.dx + l.dx + o.dx,

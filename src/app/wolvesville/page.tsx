@@ -42,7 +42,7 @@ import {
 } from "@/lib/avatar-calibration";
 import { AvatarRenderError, renderAvatarBlob, type Density } from "@/lib/avatar-render";
 import { downloadBlob, downloadRemote } from "@/lib/save-image";
-import { CUSTOM_ID_PREFIX, CUSTOM_ITEMS, DEFAULT_SHIRT_ID } from "@/data/custom-items";
+import { CUSTOM_ID_PREFIX, CUSTOM_ITEMS, DEFAULT_AVATAR } from "@/data/custom-items";
 import {
   COLOR_FILTERS,
   ORIGINS,
@@ -318,26 +318,26 @@ export default function WolvesvillePage() {
       setColorIndex(catalog.colorIndex);
       setSkinPacks(catalog.skinPacks);
 
-      // Avatar di partenza vestito: occhi, capelli e maglia base (solo al primo caricamento,
-      // cosi' "None" scelto dall'utente non viene riapplicato dopo un aggiornamento).
+      // Skin di partenza (DEFAULT_AVATAR): solo al primo caricamento, cosi' un "None"
+      // scelto dall'utente non viene riapplicato dopo un aggiornamento del catalogo.
       if (!defaultsApplied.current) {
         defaultsApplied.current = true;
-        const basic = (type: string, file: string) =>
-          catalog.items.find((i) => i.type === type && i.imageUrl.endsWith(`/${file}`))?.id ??
-          null;
+        const known = new Set<string>([
+          ...CUSTOM_ITEMS.map((i) => i.id),
+          ...catalog.items.map((i) => i.id),
+          ...catalog.bodyPaints.map((p) => p.id),
+        ]);
         setSlots((prev) => {
           const next = { ...prev };
+          for (const [slot, id] of Object.entries(DEFAULT_AVATAR)) {
+            if (!next[slot] && known.has(id)) next[slot] = id;
+          }
+          // Senza body paint scelto l'omino resterebbe invisibile: ripiego sul base
           if (!next.bodyPaintId) {
             const paint =
               catalog.bodyPaints.find((p) => p.imageUrl.includes("skin-1")) ??
               catalog.bodyPaints[0];
             if (paint) next.bodyPaintId = paint.id;
-          }
-          if (!next.eyesId) next.eyesId = basic("EYES", "eyes-standard.store.png");
-          if (!next.hairId) next.hairId = basic("HAIR", "hair-1.store.png");
-          if (!next.shirtId) {
-            const custom = CUSTOM_ITEMS.find((i) => i.id === DEFAULT_SHIRT_ID);
-            next.shirtId = custom?.id ?? basic("SHIRT", "clothes-1.store.png");
           }
           return next;
         });
@@ -551,8 +551,17 @@ export default function WolvesvillePage() {
         background: activeBg,
         density,
       });
+      // Una skin incompleta o con un livello mancante si scarica comunque: si salta il
+      // livello che non si carica e si avvisa (prima l'intero download andava in errore).
       if (result.skipped.length) {
-        throw new Error(`${result.skipped.length} layer non caricati dal CDN.`);
+        console.warn("Livelli non caricati:", result.skipped);
+        const names = result.skipped
+          .map((u) => decodeURIComponent(u.split("?")[0].split("/").pop() ?? u))
+          .slice(0, 3)
+          .join(", ");
+        toast.warning(
+          `Scaricata senza ${result.skipped.length} livello/i non caricato/i (${names})`,
+        );
       }
       deliver(result.blob);
       setDownloading(false);
